@@ -37,7 +37,6 @@ import { CSS } from "@dnd-kit/utilities";
 // --- src/types/common.ts ---
 export type Category = "아우터" | "니트" | "셔츠" | "팬츠" | "슈즈" | "가방" | "액세서리";
 export type Season = "여름" | "봄/가을" | "겨울";
-export type Condition = "새 상품" | "매우 좋음" | "좋음" | "보통" | "낡음";
 export type DeclutterMethod = "중고 거래" | "처분";
 export type BrandTier = "헤리티지" | "디자이너" | "컨템포러리" | "SPA" | "영캐주얼" | "보세" | "스포츠" | "아웃도어";
 export type PageType = "wardrobe" | "brands" | "stats" | "calendar" | "trash";
@@ -97,7 +96,6 @@ export interface ClothingItem {
   purchasePlace: string;
   purchaseDate: string;
   addedAt: number;
-  condition: Condition | string;
   size: string;
   materials: Material[];
   lengthCm: number | string;
@@ -170,7 +168,7 @@ const COLOR = {
 const GRAYS: string[] = ["#111111", "#3D3D3D", "#6B6B6B", "#8F8F8F", "#B3B3B3", "#D6D6D6"];
 const CATEGORIES: Category[] = ["아우터", "니트", "셔츠", "팬츠", "슈즈", "가방", "액세서리"];
 const SEASONS: Season[] = ["여름", "봄/가을", "겨울"];
-const CONDITIONS: Condition[] = ["새 상품", "매우 좋음", "좋음", "보통", "낡음"];
+const SIZE_OPTIONS = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "FREE",];
 const DECLUTTER_METHODS: DeclutterMethod[] = ["중고 거래", "처분"];
 const BRAND_TIERS: BrandTier[] = ["헤리티지", "디자이너", "컨템포러리", "SPA", "영캐주얼", "보세", "스포츠", "아웃도어"];
 
@@ -342,10 +340,9 @@ const seedItem = (over: Partial<ClothingItem> & { seed?: string }): ClothingItem
   price: 0,
   purchasePrice: 0,
   purchasePlace: "",
-  purchaseDate: "2024-01-01",
+  purchaseDate: "",
   addedAt: Date.now(), 
-  condition: CONDITIONS[1],
-  size: "M",
+  size: "",
   materials: [],
   lengthCm: "",
   chestCm: "",
@@ -660,7 +657,7 @@ function SeasonPicker({ value, onChange }: SeasonPickerProps) {
     onChange(Array.from(set));
   };
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 18, }}>
       {SEASONS.map((s) => (
         <button key={s} type="button" onClick={() => toggle(s)} style={{
           padding: "7px 12px", fontSize: 12.5, borderRadius: 6, cursor: "pointer",
@@ -1942,7 +1939,7 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
             logo: dataToSave._newBrandLogo || "",
             memo: "",
             favorite: false,
-            color: "#111111"
+            color: "#B8B8B8"
           });
         }
       } else {
@@ -2046,13 +2043,46 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
           <Field label="Purchase Price"><TextInput type="number" value={draft.purchasePrice} onChange={set("purchasePrice")} /></Field>
           <Field label="Place of Purchase"><TextInput value={draft.purchasePlace} onChange={set("purchasePlace")} /></Field>
           <Field label="Purchase Date"><TextInput type="date" value={draft.purchaseDate} onChange={set("purchaseDate")} /></Field>
-          <Field label="Condition">
-            <Select value={draft.condition} onChange={set("condition")}>{CONDITIONS.map((c) => <option key={c}>{c}</option>)}</Select>
-          </Field>
         </div>
 
         <SectionTitle>Size</SectionTitle>
-        <Field label="Size Label"><TextInput value={draft.size} onChange={set("size")} /></Field>
+        <Field label="Size Label">
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "center",
+      gap: 8,
+      flexWrap: "wrap", marginTop: 14, marginBottom: 16,
+    }}
+  >
+    {SIZE_OPTIONS.map((option) => {
+      const active = draft.size === option;
+
+      return (
+        <button
+          key={option}
+          type="button"
+          onClick={() => setField("size", option)}
+          style={{
+            minWidth: option === "FREE" ? 54 : 38,
+            height: 34,
+            padding: "0 10px",
+            borderRadius: 17,
+            border: `1px solid ${active ? COLOR.text : COLOR.border}`,
+            background: active ? COLOR.text : COLOR.bg,
+            color: active ? "#fff" : COLOR.text,
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 500,
+            transition: "all .15s",
+          }}
+        >
+          {option}
+        </button>
+      );
+    })}
+  </div>
+</Field>
         <Field label="Materials">
           <MaterialsEditor 
              materials={draft.materials} 
@@ -2077,16 +2107,16 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
           To be decluttered
         </button>
         {draft.declutter && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 18 }}>
             {DECLUTTER_METHODS.map((m) => (
-              <button key={m} type="button" onClick={() => setField("declutterMethod", m)} style={chipBtnStyle(draft.declutterMethod === m)}>
+              <button key={m} type="button" onClick={() => setField("declutterMethod", m)} style={{...chipBtnStyle(draft.declutterMethod === m), minWidth: 92, }}>
                 {m}
               </button>
             ))}
           </div>
         )}
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, margin: "16px 0 24px", cursor: "pointer" }}>
-          <input type="checkbox" checked={draft.repairNeeded} onChange={setBool("repairNeeded")} />
+          <input type="checkbox" checked={draft.repairNeeded} onChange={setBool("repairNeeded")} style={{width: 15, height: 15, margin: 0, accentColor: "#2F2F2F", cursor: "pointer", }} />
           Repair Needed
         </label>
 
@@ -2155,7 +2185,6 @@ function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, onAddMa
   const [mediaTab, setMediaTab] = useState("photos");
   const [newBrandTier, setNewBrandTier] = useState<BrandTier | string>(BRAND_TIERS[5]); 
   const [newBrandLogo, setNewBrandLogo] = useState("");
-
   const initialFormRef = useRef(form);
   const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialFormRef.current), [form]);
 
@@ -2189,7 +2218,7 @@ function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, onAddMa
           logo: newBrandLogo,
           memo: "",
           favorite: false,
-          color: "#111111"
+          color: "#B8B8B8"
         });
       }
     }
@@ -2245,7 +2274,54 @@ function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, onAddMa
           <Field label="Category">
             <Select value={form.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
           </Field>
-          <Field label="Size Label"><TextInput value={form.size} onChange={set("size")} /></Field>
+          <div style={{ gridColumn: "1 / -1" }}>
+  <Field label="Size Label">
+<div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "nowrap",
+    overflowX: "auto",
+    paddingBottom: 2,
+  }}
+>
+    {SIZE_OPTIONS.map((option) => {
+  const active = form.size === option;
+
+  return (
+    <button
+      key={option}
+      type="button"
+      onClick={() =>
+        setForm((prev) => ({
+          ...prev,
+          size: option,
+        }))
+      }
+      style={{
+        minWidth: option === "FREE" ? 54 : 38,
+        height: 34,
+        padding: "0 10px",
+        borderRadius: 17,
+        border: `1px solid ${active ? COLOR.text : COLOR.border}`,
+        background: active ? COLOR.text : COLOR.bg,
+        color: active ? "#fff" : COLOR.text,
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 500,
+        transition: "all .15s",
+      }}
+    >
+      {option}
+    </button>
+  );
+})}
+  </div>
+</Field>
+</div>
+
           <Field label="Season" style={{ gridColumn: "1 / -1" }}>
             <SeasonPicker value={form.seasons} onChange={(v) => setField("seasons", v)} />
           </Field>
@@ -2392,49 +2468,199 @@ function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, items }:
         background: COLOR.bg, borderLeft: `1px solid ${COLOR.border}`, zIndex: 41,
         overflowY: "auto", padding: "22px 24px 40px", boxShadow: "-12px 0 32px rgba(0,0,0,0.06)",
       }}>
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: draft.color || "transparent" }} />
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <BrandLogoPicker value={draft.logo} onChange={(v) => setDraft(d => ({ ...d, logo: v }))} />
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input 
-                  value={draft.name} 
-                  onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
-                  style={{ 
-                    fontSize: 20, fontWeight: 500, color: COLOR.text, 
-                    border: "none", background: "transparent", outline: "none", 
-                    padding: "0 2px", borderBottom: `1px solid transparent`,
-                    width: 180, transition: "border-color 0.2s"
-                  }}
-                  onFocus={e => e.target.style.borderBottomColor = COLOR.text}
-                  onBlur={e => e.target.style.borderBottomColor = "transparent"}
-                />
-                <input 
-                  type="color" value={draft.color || "#111111"} onChange={e => setDraft(d => ({ ...d, color: e.target.value }))} 
-                  style={{ width: 16, height: 16, padding: 0, border: "none", cursor: "pointer", background: 'none' }} 
-                  title="Brand Color"
-                />
-              </div>
-              <div style={{ marginTop: 6, paddingLeft: 2 }}>
-                <Select value={draft.tier} onChange={e => setDraft(d => ({ ...d, tier: e.target.value }))} style={{ padding: "5px 8px", fontSize: 12, width: 130 }}>
-                  {BRAND_TIERS.map(t => <option key={t}>{t}</option>)}
-                </Select>
-              </div>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {status === "saving" && <span style={{ fontSize: 11, color: COLOR.subtext }}>Saving...</span>}
-            {status === "saved" && <span style={{ fontSize: 11, color: COLOR.subtext }}>Saved</span>}
-            <button onClick={() => setDraft(d => ({ ...d, favorite: !d.favorite }))} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-              <Heart size={18} color={COLOR.text} fill={draft.favorite ? COLOR.text : "none"} strokeWidth={1.6} />
-            </button>
-            <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
-              <X size={18} color={COLOR.subtext} />
-            </button>
-          </div>
-        </div>
+        <div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 22,
+  }}
+>
+  {/* Left */}
+<div style={{ flex: 1 }}>
+
+  {/* Logo + Name */}
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      marginBottom: 22,
+    }}
+  >
+    <BrandLogoPicker
+      value={draft.logo}
+      onChange={(v) => setDraft(d => ({ ...d, logo: v }))}
+    />
+
+    <input
+      value={draft.name}
+      onChange={e => setDraft(d => ({ ...d, name: e.target.value }))}
+      style={{
+        fontSize: 20,
+        fontWeight: 500,
+        color: COLOR.text,
+        border: "none",
+        background: "transparent",
+        outline: "none",
+        padding: 0,
+        width: 220,
+        borderBottom: "1px solid transparent",
+      }}
+      onFocus={e => e.target.style.borderBottomColor = COLOR.text}
+      onBlur={e => e.target.style.borderBottomColor = "transparent"}
+    />
+  </div>
+
+  <div
+  style={{
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 28,
+    marginBottom: 22,
+  }}
+>
+  <div>
+    <div
+      style={{
+        fontSize: 11,
+        color: COLOR.subtext,
+        marginBottom: 6,
+      }}
+    >
+      Category
+    </div>
+
+    <Select
+      value={draft.tier}
+      onChange={e => setDraft(d => ({ ...d, tier: e.target.value }))}
+      style={{
+        width: 170,
+        padding: "6px 10px",
+        fontSize: 12,
+      }}
+    >
+      {BRAND_TIERS.map(t => (
+        <option key={t}>{t}</option>
+      ))}
+    </Select>
+  </div>
+
+  <div>
+  <div
+    style={{
+      fontSize: 11,
+      color: COLOR.subtext,
+      marginBottom: 4.5,
+    }}
+  >
+    Color
+  </div>
+
+  <div
+  style={{
+      width: 45,
+      height: 32,
+      border: `1px solid ${COLOR.border}`,
+      borderRadius: 6,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: COLOR.bg,
+      boxSizing: "border-box",
+      marginTop: 2,
+  }}
+>
+    <input
+      type="color"
+      value={draft.color || "#B8B8B8"}
+      onChange={e =>
+        setDraft(d => ({
+          ...d,
+          color: e.target.value,
+        }))
+      }
+      style={{
+        width: 20,
+        height: 16,
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        background: "transparent",
+      }}
+    />
+  </div>
+</div>
+</div>
+
+</div>
+
+  {/* Right */}
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+    }}
+  >
+    {status === "saving" && (
+      <span
+        style={{
+          fontSize: 11,
+          color: COLOR.subtext,
+        }}
+      >
+        Saving...
+      </span>
+    )}
+
+    {status === "saved" && (
+      <span
+        style={{
+          fontSize: 11,
+          color: COLOR.subtext,
+        }}
+      >
+        Saved
+      </span>
+    )}
+
+    <button
+      onClick={() =>
+        setDraft(d => ({
+          ...d,
+          favorite: !d.favorite,
+        }))
+      }
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        display: "flex",
+      }}
+    >
+      <Heart
+        size={18}
+        color={COLOR.text}
+        fill={draft.favorite ? COLOR.text : "none"}
+        strokeWidth={1.6}
+      />
+    </button>
+
+    <button
+      onClick={handleClose}
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        display: "flex",
+      }}
+    >
+      <X size={18} color={COLOR.subtext} />
+    </button>
+  </div>
+</div>
 
         <div style={{ borderTop: `1px solid ${COLOR.border}`, opacity: 0.6, marginBottom: 20 }} />
 
@@ -2517,8 +2743,14 @@ interface BrandCardProps {
   brand: BrandWithStats;
   onClick: () => void;
 }
+interface BrandCardProps {
+  brand: BrandWithStats;
+  onClick: () => void;
+}
+
 function BrandCard({ brand, onClick }: BrandCardProps) {
   const [hover, setHover] = useState(false);
+
   return (
     <div
       onClick={onClick}
@@ -2527,22 +2759,77 @@ function BrandCard({ brand, onClick }: BrandCardProps) {
       style={{
         border: `1px solid ${hover ? "#C9C9C9" : COLOR.border}`,
         borderRadius: 8,
-        padding: 18,
+        padding: 20,
         background: COLOR.bg,
         cursor: "pointer",
-        transition: "border-color 0.15s ease",
+        transition: "border-color .15s ease",
         position: "relative",
-        overflow: "hidden"
+        overflow: "hidden",
       }}
     >
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: brand.color || "transparent" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <BrandLogo src={brand.logo} size={16} />
-        <div style={{ fontSize: 16, fontWeight: 500 }}>{brand.name}</div>
+      {/* Left Accent */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          background: brand.color || "#B8B8B8",
+        }}
+      />
+
+      {/* Brand */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 10,
+        }}
+      >
+        <BrandLogo src={brand.logo} size={18} />
+
+        <div
+          style={{
+            fontSize: 17,
+            fontWeight: 500,
+            color: COLOR.text,
+            lineHeight: 1.2,
+          }}
+        >
+          {brand.name}
+        </div>
       </div>
-      <div style={{ fontSize: 12, color: COLOR.subtext, marginBottom: 14 }}>{brand.tier}</div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, color: COLOR.subtext, borderTop: `1px solid ${COLOR.border}`, paddingTop: 10 }}>
-        <span>{brand.items.length}</span>
+
+      {/* Category */}
+      <div
+        style={{
+          fontSize: 12,
+          color: COLOR.subtext,
+          marginBottom: 16,
+          paddingLeft: brand.logo ? 26 : 0,
+          textAlign: "left",
+          width: "100%",
+        }}
+      >
+        {brand.tier}
+      </div>
+
+      {/* Bottom */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderTop: `1px solid ${COLOR.border}`,
+          paddingTop: 12,
+          fontSize: 12.5,
+          color: COLOR.subtext,
+        }}
+      >
+        <span>{brand.items.length} items</span>
+
         <span>{fmtWon(brand.total)}</span>
       </div>
     </div>
@@ -3643,7 +3930,7 @@ export default function App() {
               logo: legacyIt.brandLogo || "",
               memo: localStorage.getItem(`brand_memo_${bName}`) || "",
               favorite: false,
-              color: "#111111"
+              color: "#B8B8B8"
             };
             migratedBrands.push(newBrand);
             await storeSet(`brand:${newId}`, JSON.stringify(newBrand));
@@ -3832,7 +4119,7 @@ export default function App() {
       const matchedBrand = brands.find(b => b.id === it.brandId);
       return { 
         ...it, 
-        brandInfo: matchedBrand || { id: it.brandId, name: it.brandName, tier: "보세", logo: "", memo: "", favorite: false, color: "#111111" } 
+        brandInfo: matchedBrand || { id: it.brandId, name: it.brandName, tier: "보세", logo: "", memo: "", favorite: false, color: "#B8B8B8" } 
       };
     });
   }, [items, brands]);
