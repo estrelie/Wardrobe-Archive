@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
-  Search, SlidersHorizontal, ArrowUpDown, LayoutGrid, Rows3, Plus, X,
+  Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, Rows3, Plus, X,
   Heart, Trash2, BarChart3, Shirt, Tag, Command, Image as ImageIcon,
   ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Square, Calendar as CalendarIcon, Database
 } from "lucide-react";
@@ -35,7 +35,33 @@ import { CSS } from "@dnd-kit/utilities";
 ========================================================= */
 
 // --- src/types/common.ts ---
-export type Category = "아우터" | "니트" | "셔츠" | "팬츠" | "슈즈" | "가방" | "액세서리";
+export type Category =
+  | "T-shirt"
+  | "Long Sleeve"
+  | "Shirt"
+  | "Blouse"
+  | "Knit"
+  | "Sweatshirt"
+  | "Hoodie"
+  | "Sleeveless"
+  | "Dress"
+  | "Denim"
+  | "Slacks"
+  | "Pants"
+  | "Shorts"
+  | "Skirt"
+  | "Jacket"
+  | "Coat"
+  | "Padding"
+  | "Shoes"
+  | "Bag"
+  | "Accessories";
+export type CategoryGroup =
+  | "Tops"
+  | "Dress"
+  | "Bottoms"
+  | "Outerwear"
+  | "Others";
 export type Season = "여름" | "봄/가을" | "겨울";
 export type DeclutterMethod = "중고 거래" | "처분";
 export type BrandTier = "헤리티지" | "디자이너" | "컨템포러리" | "SPA" | "영캐주얼" | "보세" | "스포츠" | "아웃도어";
@@ -166,7 +192,63 @@ const COLOR = {
 };
 
 const GRAYS: string[] = ["#111111", "#3D3D3D", "#6B6B6B", "#8F8F8F", "#B3B3B3", "#D6D6D6"];
-const CATEGORIES: Category[] = ["아우터", "니트", "셔츠", "팬츠", "슈즈", "가방", "액세서리"];
+const CATEGORIES: Category[] = [
+  "T-shirt",
+  "Long Sleeve",
+  "Shirt",
+  "Blouse",
+  "Knit",
+  "Sweatshirt",
+  "Hoodie",
+  "Sleeveless",
+
+  "Dress",
+
+  "Denim",
+  "Slacks",
+  "Pants",
+  "Shorts",
+  "Skirt",
+
+  "Jacket",
+  "Coat",
+  "Padding",
+
+  "Shoes",
+  "Bag",
+  "Accessories",];
+const CATEGORY_GROUPS: Record<CategoryGroup, Category[]> = {
+  Tops: [
+    "T-shirt",
+    "Long Sleeve",
+    "Shirt",
+    "Blouse",
+    "Knit",
+    "Sweatshirt",
+    "Hoodie",
+    "Sleeveless",
+  ],
+  Dress: [
+    "Dress",
+  ],
+  Bottoms: [
+    "Denim",
+    "Slacks",
+    "Pants",
+    "Shorts",
+    "Skirt",
+  ],
+  Outerwear: [
+    "Jacket",
+    "Coat",
+    "Padding",
+  ],
+  Others: [
+    "Shoes",
+    "Bag",
+    "Accessories",
+  ],
+};
 const SEASONS: Season[] = ["여름", "봄/가을", "겨울"];
 const SIZE_OPTIONS = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "FREE",];
 const DECLUTTER_METHODS: DeclutterMethod[] = ["중고 거래", "처분"];
@@ -230,13 +312,35 @@ const SIZE_FIELD_SETS: Record<string, SizeField[]> = {
 };
 
 const CATEGORY_SIZE_TYPE: Record<string, string> = {
-  "니트": "top",
-  "셔츠": "top",
-  "아우터": "outer",
-  "팬츠": "bottom",
-  "슈즈": "none",
-  "액세서리": "none",
-  "가방": "bag",
+  // Tops
+  "T-shirt": "top",
+  "Long Sleeve": "top",
+  "Shirt": "top",
+  "Blouse": "top",
+  "Knit": "top",
+  "Sweatshirt": "top",
+  "Hoodie": "top",
+  "Sleeveless": "top",
+
+  // Dress
+  "Dress": "top",
+
+  // Bottoms
+  "Denim": "bottom",
+  "Slacks": "bottom",
+  "Pants": "bottom",
+  "Shorts": "bottom",
+  "Skirt": "bottom",
+
+  // Outerwear
+  "Jacket": "outer",
+  "Coat": "outer",
+  "Padding": "outer",
+
+  // Others
+  "Shoes": "none",
+  "Bag": "bag",
+  "Accessories": "none",
 };
 
 function getSizeFields(category: string): SizeField[] | null {
@@ -369,11 +473,11 @@ const seedItem = (over: Partial<ClothingItem> & { seed?: string }): ClothingItem
 });
 
 const initialItems: ClothingItem[] = [
-  seedItem({ seed: "a1", brandName: "LACOSTE", name: "피케 반팔 셔츠", category: "셔츠", seasons: ["여름"], price: 129000, purchasePrice: 89000, purchasePlace: "무신사", purchaseDate: "2024-05-11", materials: [{ name: "면", percent: 100 }], lengthCm: 72, chestCm: 54, shoulderCm: 46, sleeveCm: 22, favorite: true }),
-  seedItem({ seed: "a2", brandName: "COS", name: "울 오버사이즈 코트", category: "아우터", seasons: ["겨울"], price: 390000, purchasePrice: 390000, purchasePlace: "COS 청담", purchaseDate: "2023-11-02", materials: [{ name: "울", percent: 90 }, { name: "캐시미어", percent: 10 }], lengthCm: 98, chestCm: 62, shoulderCm: 50, sleeveCm: 64, favorite: true }),
-  seedItem({ seed: "a3", brandName: "ARKET", name: "코튼 니트 스웨터", category: "니트", seasons: ["봄/가을"], price: 99000, purchasePrice: 79000, purchasePlace: "ARKET", purchaseDate: "2024-09-20", materials: [{ name: "면", percent: 100 }], lengthCm: 65, chestCm: 56, shoulderCm: 48, sleeveCm: 60 }),
-  seedItem({ seed: "a4", brandName: "UNIQLO", name: "히트텍 크루넥", category: "니트", seasons: ["겨울"], price: 19900, purchasePrice: 14900, purchasePlace: "유니클로", purchaseDate: "2023-12-01", materials: [{ name: "폴리에스터", percent: 89 }, { name: "폴리우레탄", percent: 11 }], lengthCm: 66, chestCm: 50, shoulderCm: 44, sleeveCm: 58 }),
-  seedItem({ seed: "a5", brandName: "Acne Studios", name: "데님 와이드 팬츠", category: "팬츠", seasons: ["여름", "봄/가을", "겨울"], price: 320000, purchasePrice: 250000, purchasePlace: "무신사", purchaseDate: "2024-02-14", materials: [{ name: "면", percent: 98 }, { name: "폴리우레탄", percent: 2 }], lengthCm: 108, favorite: true }),
+  seedItem({ seed: "a1", brandName: "LACOSTE", name: "피케 반팔 셔츠", category: "Shirt", seasons: ["여름"], price: 129000, purchasePrice: 89000, purchasePlace: "무신사", purchaseDate: "2024-05-11", materials: [{ name: "면", percent: 100 }], lengthCm: 72, chestCm: 54, shoulderCm: 46, sleeveCm: 22, favorite: true }),
+  seedItem({ seed: "a2", brandName: "COS", name: "울 오버사이즈 코트", category: "Coat", seasons: ["겨울"], price: 390000, purchasePrice: 390000, purchasePlace: "COS 청담", purchaseDate: "2023-11-02", materials: [{ name: "울", percent: 90 }, { name: "캐시미어", percent: 10 }], lengthCm: 98, chestCm: 62, shoulderCm: 50, sleeveCm: 64, favorite: true }),
+  seedItem({ seed: "a3", brandName: "ARKET", name: "코튼 니트 스웨터", category: "Knit", seasons: ["봄/가을"], price: 99000, purchasePrice: 79000, purchasePlace: "ARKET", purchaseDate: "2024-09-20", materials: [{ name: "면", percent: 100 }], lengthCm: 65, chestCm: 56, shoulderCm: 48, sleeveCm: 60 }),
+  seedItem({ seed: "a4", brandName: "UNIQLO", name: "히트텍 크루넥", category: "Long Sleeve", seasons: ["겨울"], price: 19900, purchasePrice: 14900, purchasePlace: "유니클로", purchaseDate: "2023-12-01", materials: [{ name: "폴리에스터", percent: 89 }, { name: "폴리우레탄", percent: 11 }], lengthCm: 66, chestCm: 50, shoulderCm: 44, sleeveCm: 58 }),
+  seedItem({ seed: "a5", brandName: "Acne Studios", name: "데님 와이드 팬츠", category: "Pants", seasons: ["여름", "봄/가을", "겨울"], price: 320000, purchasePrice: 250000, purchasePlace: "무신사", purchaseDate: "2024-02-14", materials: [{ name: "면", percent: 98 }, { name: "폴리우레탄", percent: 2 }], lengthCm: 108, favorite: true }),
 ];
 
 const fmtWon = (n: number | string) => `₩${Number(n || 0).toLocaleString("ko-KR")}`;
@@ -513,7 +617,8 @@ interface ActiveChipProps {
 function ActiveChip({ label, onRemove, icon }: ActiveChipProps) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      height: 29, gap: 8, padding: "0px 14px",
       background: COLOR.bg2, border: `1px solid ${COLOR.border}`, borderRadius: 20,
       fontSize: 12.5, color: COLOR.text, animation: "simpleFade 0.2s ease"
     }}>
@@ -571,11 +676,28 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function StatBox({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div style={{ border: `1px solid ${COLOR.border}`, borderRadius: 6, padding: "10px 12px" }}>
-      <div style={{ fontSize: 11, color: COLOR.subtext, marginBottom: 4 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: COLOR.text }}>{value}</div>
-        {sub && <div style={{ fontSize: 11.5, color: COLOR.subtext }}>{sub}</div>}
+    <div style={{
+        border: `1px solid ${COLOR.border}`,
+        borderRadius: 6,
+        padding: "14px 12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div style={{ fontSize: 11, color: COLOR.subtext, marginBottom: 10, textAlign: "center", }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 6, }}>
+        <div style={{ fontSize: 15, fontWeight: 430, color: COLOR.text, }}>
+          {value}
+        </div>
+        {sub && (
+          <div style={{ fontSize: 11.5, color: COLOR.subtext, }}>
+            {sub}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1704,7 +1826,17 @@ function FilterPopover({ filters, setFilters, availableBrands }: FilterPopoverPr
       <Group title="Brand" options={availableBrands} filterKey="brands" />
       
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${COLOR.border}` }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer", color: COLOR.text }}>
+        <label onClick={() => setFilters((f) => ({ ...f, favoriteOnly: !f.favoriteOnly, }))  
+  }
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    cursor: "pointer",
+    color: COLOR.text,
+  }}
+>
           <div style={{
             width: 34, height: 20, borderRadius: 12, background: filters.favoriteOnly ? COLOR.text : COLOR.border,
             position: "relative", transition: "background 0.2s"
@@ -1769,17 +1901,21 @@ function SortPanel({ sorts, setSorts, fields, defaultKey }: SortPanelProps) {
       background: COLOR.bg, border: `1px solid ${COLOR.border}`, borderRadius: 8,
       padding: 16, boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
     }}>
-      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Sort</div>
+      <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 11 }}>Sort</div>
       {sorts.map((s, i) => (
-        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+        <div key={i} style={{ display: "flex", gap: 5, marginBottom: 8, alignItems: "center" }}>
           <Select value={s.key} onChange={(e) => update(i, { key: e.target.value })} style={{ flex: 1, padding: "6px 8px", fontSize: 12.5 }}>
             {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </Select>
-          <button onClick={() => update(i, { dir: s.dir === "asc" ? "desc" : "asc" })}
-            style={{ border: `1px solid ${COLOR.border}`, borderRadius: 5, background: COLOR.bg, cursor: "pointer", padding: "6px 8px", fontSize: 12.5 }}>
-            {s.dir === "asc" ? "Ascending" : "Descending"}
+          <button 
+            onClick={() => update(i, { dir: s.dir === "asc" ? "desc" : "asc" })}
+            style={{ minWidth: 60, height: 32, border: `1px solid ${COLOR.border}`, borderRadius: 5, background: COLOR.bg, color: COLOR.text, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, flexShrink: 0, }}>
+            {s.dir === "asc" ? "Asc" : "Desc"}
           </button>
-          <button onClick={() => remove(i)} style={{ background: "none", border: "none", cursor: "pointer", color: COLOR.subtext }}>
+          <button 
+            onClick={() => remove(i)} 
+            style={{ width: 25, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: COLOR.subtext, flexShrink: 0, }}
+          >
             <X size={14} />
           </button>
         </div>
@@ -2936,6 +3072,23 @@ function WardrobePage({
   brands, availableBrands, toggleFilter,
   filtered, setSelected, toggleFavorite
 }: WardrobePageProps) {
+
+  const filterRef = useRef<HTMLDivElement>(null);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) 
+        {setFilterOpen(false);}
+      if (sortRef.current && !sortRef.current.contains(event.target as Node)) 
+        {setSortOpen(false);}
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [setFilterOpen]);
+  
   return (
     <>
       <PageHeader title="Wardrobe" />
@@ -2955,7 +3108,7 @@ function WardrobePage({
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ position: "relative" }}>
+          <div ref={sortRef} style={{ position: "relative" }}>
             <IconBtn onClick={() => { setSortOpen((v) => !v); setFilterOpen(false); }} active={sortOpen || sorts.length > 0}>
               <ArrowUpDown size={14} /> Sort {sorts.length > 0 && `(${sorts.length})`}
             </IconBtn>
@@ -2997,7 +3150,15 @@ function WardrobePage({
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, flexWrap: "wrap", position: "relative" }}>
+      <div ref={filterRef} style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 24,
+    flexWrap: "wrap",
+    position: "relative",
+  }}
+>
         <IconBtn onClick={() => { setFilterOpen((v) => !v); setSortOpen(false); }} active={filterOpen || activeFilterCount > 0}>
           <SlidersHorizontal size={14} /> Filter {activeFilterCount > 0 && `(${activeFilterCount})`}
         </IconBtn>
@@ -3037,12 +3198,30 @@ interface BrandsPageProps {
   setSortOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 function BrandsPage({ brandsWithStats, onSelectBrand, sorts, setSorts, sortOpen, setSortOpen }: BrandsPageProps) {
+  const sortRef = useRef<HTMLDivElement>(null);
+
+useEffect(() => {
+  function handleClickOutside(event: MouseEvent) {
+    const target = event.target as Node;
+    if (sortRef.current && !sortRef.current.contains(target)
+    ) { setSortOpen(false); }
+  }
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, [setSortOpen]);
+
   return (
     <div>
       <PageHeader 
         title="Brands" 
         action={
-          <div style={{ position: "relative", zIndex: 20 }}>
+          <div 
+           ref={sortRef}
+           style={{ position: "relative", zIndex: 20 }}
+          >
             <IconBtn onClick={() => setSortOpen((v) => !v)} active={sortOpen || sorts.length > 0}>
               <ArrowUpDown size={14} /> Sort {sorts.length > 0 && `(${sorts.length})`}
             </IconBtn>
@@ -3139,9 +3318,9 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
   }, [sales]);
 
   const StatBlock = ({ label, value, sub }: { label: string, value: string, sub?: string }) => (
-    <div>
-      <div style={{ fontSize: 12, color: COLOR.subtext, marginBottom: 8, letterSpacing: 0.2 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", }}>
+      <div style={{ fontSize: 12, color: COLOR.subtext, marginBottom: 8, letterSpacing: 0.2, textAlign: "center", }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8, }}>
         <span style={{ fontSize: 24, fontWeight: 500, color: COLOR.text, letterSpacing: -0.5 }}>{value}</span>
         {sub && <span style={{ fontSize: 13, color: COLOR.subtext }}>{sub}</span>}
       </div>
@@ -3178,7 +3357,7 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
 
       <div style={{ marginBottom: 60 }}>
         <SectionTitle>Overview</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "36px 40px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "36px 40px", justifyItems: "center", }}>
           <StatBlock label="Total Items" value={`${stats.total}`} />
           <StatBlock label="Favorites" value={`${stats.favs}`} sub={`/ ${stats.total} (${stats.favRatio}%)`} />
           <StatBlock label="Total Spending" value={fmtWon(stats.totalSpend)} />
@@ -3189,7 +3368,7 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
       <div style={{ marginBottom: 60 }}>
         <SectionTitle>Category</SectionTitle>
         {stats.category.length > 0 ? (
-          <div style={{ display: "flex", gap: 40, alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 20, alignItems: "center" }}>
             <div style={{ width: 180, height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -3202,10 +3381,11 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {stats.category.map((c, i) => (
-                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: COLOR.subtext }}>
+                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: COLOR.subtext }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: GRAYS[i % GRAYS.length] }} />
-                  <span style={{ width: 80 }}>{c.name}</span>
-                  <span style={{ color: COLOR.text, fontWeight: 500 }}>{c.value}</span>
+                  <span style={{ width: 100 }}>{c.name}</span>
+                  <span style={{ width: 20, textAlign: "right", color: COLOR.text, fontWeight: 500, }}>
+                    {c.value} </span>
                 </div>
               ))}
             </div>
@@ -3292,7 +3472,7 @@ interface CalendarPageProps {
 
 function CalendarPage({ items, brands, onOpenItem }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [filterCategory, setFilterCategory] = useState<Category | "All">("All");
+  const [filterCategory, setFilterCategory] =  useState<CategoryGroup | "All">("All");
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
   const [hoveredDateStr, setHoveredDateStr] = useState<string | null>(null);
@@ -3323,7 +3503,9 @@ function CalendarPage({ items, brands, onOpenItem }: CalendarPageProps) {
 
   const filteredMonthItems = useMemo(() => {
     if (filterCategory === "All") return monthItems;
-    return monthItems.filter(i => i.category === filterCategory);
+    return monthItems.filter((item) =>
+      CATEGORY_GROUPS[filterCategory].includes(item.category as Category)
+    );
   }, [monthItems, filterCategory]);
 
   const groupedByDate = useMemo(() => {
@@ -3370,7 +3552,13 @@ function CalendarPage({ items, brands, onOpenItem }: CalendarPageProps) {
   for (let i = 0; i < firstDayOfWeek; i++) days.push(null);
   for (let i = 1; i <= daysInMonth; i++) days.push(i);
 
-  const filterOptions: (Category | "All")[] = ["All", "아우터", "니트", "셔츠", "팬츠", "가방", "액세서리"];
+  const filterOptions: ("All" | CategoryGroup)[] = [
+  "All",
+  "Tops",
+  "Dress",
+  "Bottoms",
+  "Outerwear",
+  "Others",];
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
@@ -3387,10 +3575,10 @@ function CalendarPage({ items, brands, onOpenItem }: CalendarPageProps) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 32 }}>
-        <StatBox label="Monthly Items" value={`${stats.count} items`} />
+        <StatBox label="Monthly Items" value={`${stats.count} ${stats.count === 1 ? "item" : "items"}`} />
         <StatBox label="Monthly Spending" value={fmtWon(stats.spend)} />
-        <StatBox label="Avg. Purchase Gap" value={`${stats.avgGap} days`} />
-        <StatBox label="Days Since Last Purchase" value={`${stats.daysSinceLast} days`} />
+        <StatBox label="Avg. Purchase Gap" value={`${stats.avgGap} ${stats.avgGap === 1 ? "day" : "days"}`} />
+        <StatBox label="Days Since Last Purchase" value={`${stats.daysSinceLast} ${stats.daysSinceLast === 1 ? "day" : "days"}`} />
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -3624,15 +3812,13 @@ function TrashPage({ items, onRestore, onHardDelete, onRestoreAll, onEmptyTrash,
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 26 }}>
         <div>
             <PageHeader title="Recycle Bin" />
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: -8 }}>
-            <div style={{ fontSize: 13.5, color: COLOR.subtext }}>{items.length} items</div>
-            <div style={{ width: 4, height: 4, borderRadius: "50%", background: COLOR.border }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 12.5, color: COLOR.subtext }}>Auto Delete:</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: -8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+              <span style={{ fontSize: 12.5, color: COLOR.subtext }}>Auto-delete:</span>
               <Select 
                 value={autoDeleteDays === null ? "null" : String(autoDeleteDays)}
                 onChange={(e) => onAutoDeleteChange(e.target.value === "null" ? null : Number(e.target.value))}
-                style={{ padding: "7px 10px", fontSize: 13, width: 100, background: COLOR.bg2 }}
+                style={{ padding: "0px 10px", fontSize: 13, width: 110, height: 36, background: COLOR.bg2 }}
               >
                 <option value="null">Never</option>
                 <option value="30">30 Days</option>
