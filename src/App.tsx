@@ -191,7 +191,12 @@ const COLOR = {
   subtext: "#777777",
 };
 
-const GRAYS: string[] = ["#111111", "#3D3D3D", "#6B6B6B", "#8F8F8F", "#B3B3B3", "#D6D6D6"];
+const GRAYS: string[] = [
+  "#454545",
+  "#666666",
+  "#818181",
+  "#A0A0A0",
+  "#C3C3C3"];
 const CATEGORIES: Category[] = [
   "T-shirt",
   "Long Sleeve",
@@ -3268,8 +3273,23 @@ interface StatisticsPageProps {
   brands: Brand[];
   sales: SaleRecord[];
 }
+
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
+
+  const value = Number(payload[0].value);
+  const unit = value === 1 ? "item" : "items";
+  const rawName = label ?? payload[0]?.name ?? "";
+
+  const displayName =
+  rawName === "봄/가을"
+    ? "Spring/Fall"
+    : rawName === "여름"
+    ? "Summer"
+    : rawName === "겨울"
+    ? "Winter"
+    : rawName;
+
   return (
     <div
       style={{
@@ -3281,25 +3301,33 @@ function CustomTooltip({ active, payload, label }: any) {
       }}
     >
       <div
-  style={{
-    fontSize: 12,
-    color: COLOR.subtext,
-    fontWeight: 400,
-    whiteSpace: "nowrap",
-  }}
->
-  {label} ㅣ {payload[0].value}벌
-</div>
+        style={{
+          fontSize: 12,
+          color: COLOR.subtext,
+          fontWeight: 400,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {displayName} │ {value} {unit}
+      </div>
     </div>
   );
 }
+
 function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
   const [seasonTab, setSeasonTab] = useState<Season | "All">("All");
-
   const filteredItems = useMemo(() => {
     if (seasonTab === "All") return items;
     return items.filter(it => (it.seasons || []).includes(seasonTab));
   }, [items, seasonTab]);
+
+  const seasonLabels: Record<string, string> = {
+    "봄/가을": "Spring/Fall",
+    "여름": "Summer",
+    "겨울": "Winter",
+  };
+
+const seasonOrder = ["봄/가을", "여름", "겨울"];
 
   const stats = useMemo(() => {
     const total = filteredItems.length;
@@ -3311,9 +3339,13 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
     const avgSpend = pricedItems.length > 0 ? Math.round(totalSpend / pricedItems.length) : 0;
 
     const byCategory: Record<string, number> = {};
-    const bySeason: Record<string, number> = {}; SEASONS.forEach((s) => { bySeason[s] = 0; });
     const byBrand: Record<string, number> = {};
-    const byMaterial: Record<string, number> = {};
+    const byAge = {
+      "<1 Year": 0,
+      "1–2 Years": 0,
+      "2–3 Years": 0,
+      "3+ Years": 0,
+    };
 
     filteredItems.forEach((i) => {
       if (i.category) {
@@ -3322,15 +3354,26 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
       )?.[0] ?? "Others";
       byCategory[group] = (byCategory[group] || 0) + 1;
       }
-      (i.seasons || []).forEach((s) => { if (bySeason[s] !== undefined) bySeason[s] += 1; });
-      (i.materials || []).forEach((m) => {
-        byMaterial[m.name] = (byMaterial[m.name] || 0) + 1;
-      });
       
       const brandTier = i.brandInfo?.tier || "보세";
       if (i.brandId && brandTier !== "보세") {
         byBrand[i.brandId] = (byBrand[i.brandId] || 0) + 1;
       }
+
+if (i.purchaseDate) {
+  const purchase = new Date(i.purchaseDate);
+  const today = new Date();
+
+  const years =
+    (today.getTime() - purchase.getTime()) /
+    (1000 * 60 * 60 * 24 * 365.25);
+
+  if (years < 1) byAge["<1 Year"]++;
+  else if (years < 2) byAge["1–2 Years"]++;
+  else if (years < 3) byAge["2–3 Years"]++;
+  else byAge["3+ Years"]++;
+}
+
     });
 
 const categoryOrder: CategoryGroup[] = [
@@ -3345,42 +3388,32 @@ const category = categoryOrder.map((group) => ({
   name: CATEGORY_GROUP_LABELS[group],
   value: byCategory[group] || 0,
 }));
-   
-    const season = SEASONS.map((s) => ({ name: s, value: bySeason[s] }));
 
-    const brandEntries = Object.entries(byBrand).map(([bId, value]) => {
+const totalAgeItems = Object.values(byAge).reduce((sum, n) => sum + n, 0);
+
+    const age = Object.entries(byAge).map(([name, value]) => ({
+      name, value,
+      percent: totalAgeItems > 0 ? (value / totalAgeItems) * 100 : 0,
+    }));
+
+    const brandEntries = Object.entries(byBrand)
+    .map(([bId, value]) => {
       const bName = brands.find(b => b.id === bId)?.name || "Unknown";
       return { id: bId, name: bName, value };
-    }).sort((a, b) => b.value - a.value);
-    
-    let brandChart = brandEntries;
-    if (brandEntries.length > 10) {
-      const top = brandEntries.slice(0, 10);
-      const restSum = brandEntries.slice(10).reduce((s, e) => s + e.value, 0);
-      brandChart = [...top, { id: "others", name: "Others", value: restSum }];
-    }
+    })
+    .sort((a, b) => {
+    if (b.value !== a.value) return b.value - a.value;
+    return a.name.localeCompare(b.name);
+  });
 
-    const materialEntries = Object.entries(byMaterial).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value);
-    let materialChart = materialEntries;
-    if (materialEntries.length > 10) {
-      const top = materialEntries.slice(0, 10);
-      const restSum = materialEntries.slice(10).reduce((s, e) => s + e.value, 0);
-      materialChart = [...top, { name: "Others", value: restSum }];
-    }
+const brandChart = brandEntries.slice(0, 5);
 
     return {
       total, favs, favRatio,
       totalSpend, avgSpend,
-      category, season, brandChart, materialChart
+      category, age, brandChart,
     };
   }, [filteredItems, brands]);
-
-  const saleStats = useMemo(() => {
-    const validSales = sales.filter(s => s.soldPrice !== null && s.soldPrice !== undefined);
-    const totalRevenue = validSales.reduce((sum, s) => sum + Number(s.soldPrice || 0), 0);
-    const avgSellingPrice = validSales.length > 0 ? Math.round(totalRevenue / validSales.length) : 0;
-    return { totalRevenue, avgSellingPrice, count: validSales.length };
-  }, [sales]);
 
   const StatBlock = ({ label, value, sub }: { label: string, value: string, sub?: string }) => (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", }}>
@@ -3393,7 +3426,6 @@ const category = categoryOrder.map((group) => ({
   );
 
   const brandChartHeight = Math.max(160, stats.brandChart.length * 32);
-  const materialChartHeight = Math.max(160, stats.materialChart.length * 32);
 
   return (
     <div style={{ paddingBottom: 60 }}>
@@ -3431,7 +3463,7 @@ const category = categoryOrder.map((group) => ({
       </div>
 
       <div style={{ marginBottom: 60 }}>
-        <SectionTitle>Category</SectionTitle>
+        <SectionTitle>Category</SectionTitle> 
         {stats.category.length > 0 ? (
           <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 20, alignItems: "center" }}>
             <div style={{ width: "100%", height: 220 }}>
@@ -3465,7 +3497,7 @@ const category = categoryOrder.map((group) => ({
       axisLine={{ stroke: COLOR.border }}
       tickLine={{ stroke: COLOR.border }}
     />
-    <Tooltip  // 카테고리 튤팁
+    <Tooltip
       content={<CustomTooltip />}
       offset={16}
       cursor={{ fill: "rgba(0,0,0,0.04)",
@@ -3487,53 +3519,246 @@ const category = categoryOrder.map((group) => ({
       </div>
 
       <div style={{ marginBottom: 60 }}>
-        <SectionTitle>Season</SectionTitle>
-        {stats.total > 0 ? (
-          <div style={{ height: 220, maxWidth: 500 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.season} margin={{ left: -20, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke={COLOR.border} strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fill: COLOR.subtext }} axisLine={{ stroke: COLOR.border }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: COLOR.subtext }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip cursor={{ fill: COLOR.bg2 }} contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${COLOR.border}`, boxShadow: 'none' }} />
-                <Bar dataKey="value" fill={COLOR.text} radius={[2, 2, 0, 0]} maxBarSize={44} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: COLOR.subtext, padding: "10px 0" }}>-</div>
-        )}
-      </div>
-
-      <div style={{ marginBottom: 60 }}>
-        <SectionTitle>Brand</SectionTitle>
+        <SectionTitle>Top Brands</SectionTitle>
         {stats.brandChart.length > 0 ? (
-          <div style={{ height: brandChartHeight, maxWidth: 500 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.brandChart} layout="vertical" margin={{ left: 10, top: 0, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke={COLOR.border} strokeDasharray="3 3" />
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12.5, fill: COLOR.text }} axisLine={{ stroke: COLOR.border }} tickLine={false} />
-                <Tooltip cursor={{ fill: COLOR.bg2 }} contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${COLOR.border}`, boxShadow: 'none' }} />
-                <Bar dataKey="value" fill={COLOR.text} radius={[0, 2, 2, 0]} barSize={16} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          
+<div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 72,
+    marginTop: 20,
+  }}
+>
+  <div style={{ width: 180, height: 180 }}>
+    <ResponsiveContainer width="100%" height="100%">
+      <PieChart>
+        <Pie
+          data={stats.brandChart}
+          dataKey="value"
+          nameKey="name"
+          innerRadius={55}
+          outerRadius={85}
+          paddingAngle={2}
+          stroke="none"
+          startAngle={90}
+          endAngle={-270}
+        >
+          {stats.brandChart.map((_, i) => (
+            <Cell key={i} fill={GRAYS[i % GRAYS.length]} />
+          ))}
+        </Pie>
+        <Tooltip
+          content={<CustomTooltip />}
+          cursor={false}
+        />
+      </PieChart>
+    </ResponsiveContainer>
+  </div>
+<div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    width: 180,
+  }}
+>
+  {stats.brandChart.map((b, i) => (
+    <div
+      key={b.id}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        fontSize: 13,
+        color: COLOR.subtext,
+        width: 170,
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: GRAYS[i % GRAYS.length],
+        }}
+      />
+      <span
+        style={{
+          flex: 1,
+          marginLeft: 8,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      title={b.name}
+      >
+  {b.name}
+</span>
+      <span
+        style={{
+          width: 18,
+          textAlign: "right",
+          color: COLOR.subtext,
+          fontWeight: 400,
+        }}
+      >
+        {b.value}
+      </span>
+    </div>
+  ))}
+</div>
+</div>
         ) : (
           <div style={{ fontSize: 13, color: COLOR.subtext, padding: "10px 0" }}>-</div>
         )}
       </div>
 
-      <div>
-        <SectionTitle>Sale History</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "36px 40px" }}>
-          <StatBlock label="Total Revenue" value={saleStats.count > 0 ? fmtWon(saleStats.totalRevenue) : "-"} />
-          <StatBlock label="Average Selling Price" value={saleStats.count > 0 ? fmtWon(saleStats.avgSellingPrice) : "-"} />
-        </div>
+<div style={{ marginBottom: 60 }}>
+  <SectionTitle>Wardrobe Age</SectionTitle>
+
+  {stats.total > 0 ? (
+    <>
+
+<div
+  style={{
+    maxWidth: 760,
+    margin: "0 auto",
+    position: "relative",
+  }}
+>
+
+<div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 15,
+    marginBottom: 2,
+    fontSize: 11,
+    color: COLOR.subtext,
+    opacity: 0.75,
+    letterSpacing: 0.2,
+  }}
+>
+<span style={{ marginLeft: 8 }}>
+  Newer
+</span>
+<span style={{ marginRight: 8 }}>
+  Older
+</span>
+</div>
+
+      <div
+        style={{
+          marginTop: 5,
+          height: 27,
+          borderRadius: 999,
+          overflow: "hidden",
+          display: "flex",
+          background: COLOR.bg2,
+        }}
+      >
+        {stats.age
+          .filter(a => a.value > 0)
+          .map((a, i, arr) => {
+
+            const percent = a.percent;
+
+          return (
+            <div
+  key={a.name}
+  style={{
+                width: `${percent}%`,
+                background: GRAYS[i],
+                transition: "0.25s",
+                
+                borderTopLeftRadius: i === 0 ? 999 : 0,
+                borderBottomLeftRadius: i === 0 ? 999 : 0,
+                borderTopRightRadius: i === arr.length - 1 ? 999 : 0,
+                borderBottomRightRadius: i === arr.length - 1 ? 999 : 0,
+
+                marginRight: i === arr.length - 1 ? 0 : 2,
+              }}
+            />
+          );
+        })}
       </div>
+      </div>
+
+      <div
+  style={{
+    maxWidth: 760,
+    margin: "30px auto 0",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "15px 44px",
+    fontSize: 13,
+    lineHeight: 1, 
+    color: COLOR.subtext,
+  }}
+>
+  {stats.age
+    .filter((a) => a.value > 0)
+    .map((a, i) => (
+      <div
+        key={a.name}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          lineHeight: 1,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: GRAYS[
+              stats.age.findIndex((item) => item.name === a.name)
+            ],
+            transform: "translateY(1px)",
+          }}
+        />
+
+<span>
+  {a.name}
+</span>
+
+<span
+  style={{
+    color: COLOR.subtext,
+    opacity: 0.8,
+  }}
+>
+  ({a.value})
+</span>
+
+      </div>
+    ))}
+</div>
+        
+    </>
+  ) : (
+    <div
+      style={{
+        fontSize: 13,
+        color: COLOR.subtext,
+        padding: "10px 0",
+      }}
+    >
+      -
+    </div>
+  )}
+</div>
+
     </div>
   );
 }
+
 
 // --- src/pages/CalendarPage.tsx ---
 interface CalendarPageProps {
