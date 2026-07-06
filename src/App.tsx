@@ -249,6 +249,13 @@ const CATEGORY_GROUPS: Record<CategoryGroup, Category[]> = {
     "Accessories",
   ],
 };
+const CATEGORY_GROUP_LABELS: Record<CategoryGroup, string> = {
+  Tops: "Tops",
+  Bottoms: "Bottoms",
+  Dress: "Dresses",
+  Outerwear: "Outerwear",
+  Others: "Others",
+};
 const SEASONS: Season[] = ["여름", "봄/가을", "겨울"];
 const SIZE_OPTIONS = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "FREE",];
 const DECLUTTER_METHODS: DeclutterMethod[] = ["중고 거래", "처분"];
@@ -2546,7 +2553,12 @@ function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, items }:
     bItems.forEach((i) => {
       totalSpend += Number(i.purchasePrice || 0);
       if (i.favorite) favCount++;
-      if (i.category) categoryCounts[i.category] = (categoryCounts[i.category] || 0) + 1;
+      if (i.category) {
+        const group = Object.entries(CATEGORY_GROUPS).find(([, categories]) =>
+          categories.includes(i.category as Category)
+        )?.[0] ?? "Others";
+        categoryCounts[group] = (categoryCounts[group] || 0) + 1;
+      }
       (i.seasons || []).forEach((s) => {
         if (seasonCounts[s] !== undefined) seasonCounts[s]++;
       });
@@ -3256,6 +3268,31 @@ interface StatisticsPageProps {
   brands: Brand[];
   sales: SaleRecord[];
 }
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      style={{
+        background: COLOR.bg,
+        border: `1px solid ${COLOR.border}`,
+        borderRadius: 6,
+        padding: "8px 10px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+      }}
+    >
+      <div
+  style={{
+    fontSize: 12,
+    color: COLOR.subtext,
+    fontWeight: 400,
+    whiteSpace: "nowrap",
+  }}
+>
+  {label} ㅣ {payload[0].value}벌
+</div>
+    </div>
+  );
+}
 function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
   const [seasonTab, setSeasonTab] = useState<Season | "All">("All");
 
@@ -3279,7 +3316,12 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
     const byMaterial: Record<string, number> = {};
 
     filteredItems.forEach((i) => {
-      if (i.category) byCategory[i.category] = (byCategory[i.category] || 0) + 1;
+      if (i.category) {
+        const group = Object.entries(CATEGORY_GROUPS).find(([, categories]) =>
+          categories.includes(i.category as Category)
+      )?.[0] ?? "Others";
+      byCategory[group] = (byCategory[group] || 0) + 1;
+      }
       (i.seasons || []).forEach((s) => { if (bySeason[s] !== undefined) bySeason[s] += 1; });
       (i.materials || []).forEach((m) => {
         byMaterial[m.name] = (byMaterial[m.name] || 0) + 1;
@@ -3291,7 +3333,19 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
       }
     });
 
-    const category = Object.entries(byCategory).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+const categoryOrder: CategoryGroup[] = [
+  "Tops",
+  "Bottoms",
+  "Dress",
+  "Outerwear",
+  "Others",
+];
+
+const category = categoryOrder.map((group) => ({
+  name: CATEGORY_GROUP_LABELS[group],
+  value: byCategory[group] || 0,
+}));
+   
     const season = SEASONS.map((s) => ({ name: s, value: bySeason[s] }));
 
     const brandEntries = Object.entries(byBrand).map(([bId, value]) => {
@@ -3380,25 +3434,51 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
         <SectionTitle>Category</SectionTitle>
         {stats.category.length > 0 ? (
           <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 20, alignItems: "center" }}>
-            <div style={{ width: 180, height: 180 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={stats.category} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2} stroke="none">
-                    {stats.category.map((_, i) => <Cell key={i} fill={GRAYS[i % GRAYS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${COLOR.border}`, boxShadow: 'none' }} itemStyle={{ color: COLOR.text }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {stats.category.map((c, i) => (
-                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: COLOR.subtext }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: GRAYS[i % GRAYS.length] }} />
-                  <span style={{ width: 100 }}>{c.name}</span>
-                  <span style={{ width: 20, textAlign: "right", color: COLOR.text, fontWeight: 500, }}>
-                    {c.value} </span>
-                </div>
-              ))}
+            <div style={{ width: "100%", height: 220 }}>
+  
+<ResponsiveContainer width="100%" height="100%">
+  <BarChart
+    data={[...stats.category]}
+    layout="vertical"
+    margin={{ top: 4, right: 12, left: 12, bottom: 4 }}
+  >
+    <CartesianGrid 
+      stroke={COLOR.border}
+      strokeOpacity={0.35}
+      strokeDasharray="3 3"
+      horizontal={false}
+    />
+    <XAxis 
+      type="number"
+      allowDecimals={false}
+      domain={[0, "dataMax"]}
+      tick={{ fontSize: 11, fill: COLOR.subtext, }}
+      tickMargin={6}
+      axisLine={{ stroke: COLOR.border }}
+      tickLine={{ stroke: COLOR.border }}
+    />
+    <YAxis
+      type="category"
+      dataKey="name"
+      width={90}
+      tick={{ fontSize: 12, fill: COLOR.subtext }}
+      axisLine={{ stroke: COLOR.border }}
+      tickLine={{ stroke: COLOR.border }}
+    />
+    <Tooltip  // 카테고리 튤팁
+      content={<CustomTooltip />}
+      offset={16}
+      cursor={{ fill: "rgba(0,0,0,0.04)",
+      }}
+    />
+    <Bar
+      dataKey="value"
+      radius={[0, 4, 4, 0]}
+      fill={GRAYS[3]}
+      barSize={20}
+    />
+  </BarChart>
+</ResponsiveContainer>
             </div>
           </div>
         ) : (
@@ -3431,25 +3511,6 @@ function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
           <div style={{ height: brandChartHeight, maxWidth: 500 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.brandChart} layout="vertical" margin={{ left: 10, top: 0, bottom: 0 }}>
-                <CartesianGrid horizontal={false} stroke={COLOR.border} strokeDasharray="3 3" />
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12.5, fill: COLOR.text }} axisLine={{ stroke: COLOR.border }} tickLine={false} />
-                <Tooltip cursor={{ fill: COLOR.bg2 }} contentStyle={{ fontSize: 12, borderRadius: 4, border: `1px solid ${COLOR.border}`, boxShadow: 'none' }} />
-                <Bar dataKey="value" fill={COLOR.text} radius={[0, 2, 2, 0]} barSize={16} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, color: COLOR.subtext, padding: "10px 0" }}>-</div>
-        )}
-      </div>
-
-      <div style={{ marginBottom: 60 }}>
-        <SectionTitle>Material</SectionTitle>
-        {stats.materialChart.length > 0 ? (
-          <div style={{ height: materialChartHeight, maxWidth: 500 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.materialChart} layout="vertical" margin={{ left: 10, top: 0, bottom: 0 }}>
                 <CartesianGrid horizontal={false} stroke={COLOR.border} strokeDasharray="3 3" />
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12.5, fill: COLOR.text }} axisLine={{ stroke: COLOR.border }} tickLine={false} />
