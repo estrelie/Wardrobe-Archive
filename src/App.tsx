@@ -1102,11 +1102,17 @@ interface ImageManagerProps {
   images: string[];
   onChange: (imgs: string[]) => void;
 }
+
 function ImageManager({ images, onChange }: ImageManagerProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [dragActive, setDragActive] = useState(false);
-  const dragCounter = useRef(0);
+const inputRef = useRef<HTMLInputElement>(null);
+const [busy, setBusy] = useState(false);
+const [dragActive, setDragActive] = useState(false);
+/** 현재 크게 보고 있는 사진 */
+const [currentIndex, setCurrentIndex] = useState(0);
+/** 드래그 중인 썸네일 */
+const [activeId, setActiveId] = useState<string | null>(null);
+const dragCounter = useRef(0);
+const THUMB_COUNT = 5;
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1202,39 +1208,98 @@ function ImageManager({ images, onChange }: ImageManagerProps) {
           ? <img src={images[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <span style={{ fontSize: 12.5, color: COLOR.subtext }}>{busy ? "..." : ""}</span>}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {images.map((src, idx) => (
-          <div key={idx} style={{ position: "relative", width: 56, height: 70 }}>
-            <img src={src} alt="" style={{
-              width: "100%", height: "100%", objectFit: "cover", borderRadius: 4,
-              border: idx === 0 ? `2px solid ${COLOR.text}` : `1px solid ${COLOR.border}`,
-            }} />
-            <button type="button" onClick={() => remove(idx)} style={{
-              position: "absolute", top: -6, right: -6, width: 16, height: 16, borderRadius: "50%",
-              background: "#fff", border: `1px solid ${COLOR.border}`, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
-            }}>
-              <X size={9} />
-            </button>
-            {idx !== 0 && (
-              <button type="button" onClick={() => setMain(idx)} style={{
-                position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)",
-                fontSize: 8.5, background: "#fff", border: `1px solid ${COLOR.border}`, borderRadius: 3,
-                padding: "1px 4px", cursor: "pointer", whiteSpace: "nowrap",
-              }}>
-                Main
-              </button>
-            )}
-          </div>
-        ))}
-        <button type="button" onClick={() => inputRef.current?.click()} style={{
-          width: 56, height: 70, border: `1px dashed ${COLOR.border}`, borderRadius: 4,
-          background: COLOR.bg, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Plus size={16} color={COLOR.subtext} />
-        </button>
-        <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: "none" }} />
-      </div>
+
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    overflowX: "auto",
+    paddingTop: 2,
+    paddingBottom: 2,
+    scrollbarWidth: "thin",
+  }}
+>
+  {images.map((src, idx) => (
+    <div
+      key={idx}
+      style={{
+        position: "relative",
+        flex: "0 0 auto",
+        width: 58,
+        height: 72,
+      }}
+    >
+      <img
+        src={src}
+        alt=""
+        onClick={() => setMain(idx)}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          borderRadius: 4,
+          cursor: "pointer",
+          border:
+            idx === 0
+              ? `2px solid ${COLOR.text}`
+              : `1px solid ${COLOR.border}`,
+        }}
+      />
+
+      <button
+        type="button"
+        onClick={() => remove(idx)}
+        style={{
+          position: "absolute",
+          top: -6,
+          right: -6,
+          width: 16,
+          height: 16,
+          borderRadius: "50%",
+          background: "#fff",
+          border: `1px solid ${COLOR.border}`,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+        }}
+      >
+        <X size={9} />
+      </button>
+    </div>
+  ))}
+
+  <button
+    type="button"
+    onClick={() => inputRef.current?.click()}
+    style={{
+      flex: "0 0 auto",
+      width: 58,
+      height: 72,
+      border: `1px dashed ${COLOR.border}`,
+      borderRadius: 4,
+      background: COLOR.bg,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <Plus size={16} color={COLOR.subtext} />
+  </button>
+
+  <input
+    ref={inputRef}
+    type="file"
+    accept="image/*"
+    multiple
+    onChange={handleFiles}
+    style={{ display: "none" }}
+  />
+</div>
+
     </div>
   );
 }
@@ -2134,47 +2199,206 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
   const setBool = (k: keyof ClothingDraft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [k]: e.target.checked }));
   const setField = (k: keyof ClothingDraft, v: any) => setDraft((d) => ({ ...d, [k]: v }));
 
-  return (
-    <>
-      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(17,17,17,0.28)", zIndex: 40 }} />
-      <div style={{
-        position: "fixed", top: 0, right: 0, bottom: 0, width: 440, maxWidth: "92vw",
-        background: COLOR.bg, borderLeft: `1px solid ${COLOR.border}`, zIndex: 41,
-        overflowY: "auto", padding: "22px 24px 40px", boxShadow: "-12px 0 32px rgba(0,0,0,0.06)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <span style={{ fontSize: 11, color: COLOR.subtext, letterSpacing: 1 }}>DETAIL</span>
+return (
+  <>
+    <div
+      onClick={handleClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(17,17,17,0.28)",
+        zIndex: 40,
+      }}
+    />
+
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 41,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          width: 1180,
+          maxWidth: "95vw",
+          height: "90vh",
+          background: COLOR.bg,
+          border: `1px solid ${COLOR.border}`,
+          borderRadius: 12,
+          boxShadow: "0 24px 64px rgba(0,0,0,0.16)",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "22px 28px",
+            borderBottom: `1px solid ${COLOR.border}`,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              color: COLOR.subtext,
+              letterSpacing: 1,
+            }}
+          >
+            DETAIL
+          </span>
+
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {status === "saving" && <span style={{ fontSize: 11, color: COLOR.subtext }}>Saving...</span>}
-            {status === "saved" && <span style={{ fontSize: 11, color: COLOR.subtext }}>Saved</span>}
-            <button onClick={handleClose} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+            {status === "saving" && (
+              <span style={{ fontSize: 11, color: COLOR.subtext }}>
+                Saving...
+              </span>
+            )}
+
+            {status === "saved" && (
+              <span style={{ fontSize: 11, color: COLOR.subtext }}>
+                Saved
+              </span>
+            )}
+
+            <button
+              onClick={handleClose}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+              }}
+            >
               <X size={18} color={COLOR.subtext} />
             </button>
           </div>
         </div>
 
-        <div style={{ marginBottom: 32, minHeight: 200 }}>
-          <MediaTabs active={mediaTab} onChange={setMediaTab} />
-          {mediaTab === "photos" && (
-            <ImageManager images={draft.images} onChange={(imgs) => setField("images", imgs)} />
-          )}
-          {mediaTab === "reference" && (
-            <ReferenceManager itemId={draft.id} />
-          )}
-        </div>
+        {/* Body */}
+        <div
+          style={{
+            flex: 1,
+            display: "grid",
+            gridTemplateColumns: "420px 1fr",
+            minHeight: 0,
+          }}
+        >
+          {/* Left */}
+          <div
+            style={{
+              borderRight: `1px solid ${COLOR.border}`,
+              padding: "20px 20px 24px",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <MediaTabs
+              active={mediaTab}
+              onChange={setMediaTab}
+            />
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", margin: "18px 0" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <BrandLogo src={draft.brandInfo?.logo} size={19} />
-              <div style={{ fontSize: 20, fontWeight: 500, color: COLOR.text }}>{draft.brandName || ""}</div>
+            <div
+              style={{
+                flex: 1,
+                marginTop: 20,
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              {mediaTab === "photos" && (
+                <ImageManager
+                  images={draft.images}
+                  onChange={(imgs) => setField("images", imgs)}
+                />
+              )}
+
+              {mediaTab === "reference" && (
+                <ReferenceManager itemId={draft.id} />
+              )}
             </div>
-            <div style={{ fontSize: 14, color: COLOR.subtext, marginTop: 2 }}>{draft.name || ""}</div>
           </div>
-          <button onClick={() => setDraft((d) => ({ ...d, favorite: !d.favorite }))} style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <Heart size={20} color={COLOR.text} fill={draft.favorite ? COLOR.text : "none"} strokeWidth={1.6} />
-          </button>
-        </div>
+
+          {/* Right */}
+          <div
+            style={{
+              overflowY: "auto",
+              padding: "24px 32px 40px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: 18,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                  }}
+                >
+                  <BrandLogo
+                    src={draft.brandInfo?.logo}
+                    size={19}
+                  />
+
+                  <div
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 500,
+                      color: COLOR.text,
+                    }}
+                  >
+                    {draft.brandName || ""}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 14,
+                    color: COLOR.subtext,
+                    marginTop: 2,
+                  }}
+                >
+                  {draft.name || ""}
+                </div>
+              </div>
+
+              <button
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    favorite: !d.favorite,
+                  }))
+                }
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <Heart
+                  size={20}
+                  color={COLOR.text}
+                  fill={draft.favorite ? COLOR.text : "none"}
+                  strokeWidth={1.6}
+                />
+              </button>
+            </div>
 
         <SectionTitle>Basic Info</SectionTitle>
         <Field label="Brand">
@@ -2324,10 +2548,13 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
               </button>
             </div>
           </div>
-        )}
-      </div>
-    </>
-  );
+                )}
+          </div> {/* Right */}
+        </div> {/* Body */}
+      </div> {/* Modal */}
+    </div> {/* Overlay */}
+  </>
+);
 }
 
 interface AddModalProps {
