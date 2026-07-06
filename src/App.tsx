@@ -363,43 +363,54 @@ declare global {
   }
 }
 
-const hasStorage = typeof window !== "undefined" && !!window.storage;
-
-async function storeGet(key: string): Promise<string | null> {
-  if (!hasStorage) return null;
+async function storeGet(key: string): Promise<string |null> {
   try {
-    const r = await window.storage!.get(key, false);
-    return r ? r.value : null;
-  } catch {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.error("storage get failed", key, e);
     return null;
   }
 }
+
 async function storeSet(key: string, value: string): Promise<void> {
-  if (!hasStorage) return;
   try {
-    await window.storage!.set(key, value, false);
+    localStorage.setItem(key, value);
   } catch (e) {
     console.error("storage set failed", key, e);
   }
 }
+
 async function storeDelete(key: string): Promise<void> {
-  if (!hasStorage) return;
   try {
-    await window.storage!.delete(key, false);
+    localStorage.removeItem(key);
   } catch (e) {
     console.error("storage delete failed", key, e);
   }
 }
+
 async function storeListLoad<T>(prefix: string): Promise<T[]> {
-  if (!hasStorage) return [];
   try {
-    const res = await window.storage!.list(prefix, false);
-    const keys = res?.keys || [];
-    const values = await Promise.all(keys.map((k) => storeGet(k)));
-    return values.filter(Boolean).map((v) => {
-      try { return JSON.parse(v!) as T; } catch { return null; }
-    }).filter((v): v is T => v !== null);
-  } catch {
+    const result: T[] = [];
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+
+      if (!key || !key.startsWith(prefix)) continue;
+
+      const value = localStorage.getItem(key);
+
+      if (!value) continue;
+
+      try {
+        result.push(JSON.parse(value) as T);
+      } catch {
+        // 손상된 데이터는 건너뜀
+      }
+    }
+
+    return result;
+  } catch (e) {
+    console.error("storage list failed", e);
     return [];
   }
 }
@@ -3956,16 +3967,21 @@ function DataModal({ onClose }: DataModalProps) {
     setRestoring(true);
     try {
       const prefixes = ["item:", "brand:", "material:", "reference:", "sale:"];
-      for (const prefix of prefixes) {
-        if (hasStorage) {
-          const res = await window.storage!.list(prefix, false);
-          if (res && res.keys) {
-            for (const key of res.keys) {
-              await window.storage!.delete(key, false);
-            }
-          }
-        }
-      }
+for (const prefix of prefixes) {
+  const keysToDelete: string[] = [];
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+
+    if (key && key.startsWith(prefix)) {
+      keysToDelete.push(key);
+    }
+  }
+  
+  for (const key of keysToDelete) {
+    localStorage.removeItem(key);
+  }
+}
 
       for (const item of confirmData.items || []) await storeSet(`item:${item.id}`, JSON.stringify(item));
       for (const brand of confirmData.brands || []) await storeSet(`brand:${brand.id}`, JSON.stringify(brand));
