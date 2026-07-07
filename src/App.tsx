@@ -1151,8 +1151,8 @@ const nextImage = () => {
   }
 };
 
-const THUMB_VISIBLE_COUNT =7;
-const MAX_IMAGE_COUNT = 7;
+const THUMB_VISIBLE_COUNT =6;
+const MAX_IMAGE_COUNT = 6;
 
 const thumbStart = Math.max(
   0,
@@ -1252,8 +1252,6 @@ onChange([
       inset: 0,
       zIndex: 50,
       background: "rgba(250, 250, 248, 0.85)",
-      border: `2px dashed ${COLOR.subtext}`,
-      borderRadius: 6,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1676,10 +1674,13 @@ interface ReferenceCardProps {
   style?: React.CSSProperties;
   isDragging?: boolean;
   isOverlay?: boolean;
+  maxImageHeight?: number;
 }
-const ReferenceCard = React.memo(({ refItem, index, updateMemo, remove, onClick, setNodeRef, attributes, listeners, style, isDragging, isOverlay }: ReferenceCardProps) => {
+const ReferenceCard = React.memo(({
+  refItem, index, remove, onClick, setNodeRef, 
+  attributes, listeners, style, isDragging, isOverlay, maxImageHeight = 200}
+  : ReferenceCardProps) => {
   const [hover, setHover] = useState(false);
-  const [localMemo, setLocalMemo] = useState(refItem.memo || "");
 
   return (
     <div
@@ -1695,7 +1696,7 @@ const ReferenceCard = React.memo(({ refItem, index, updateMemo, remove, onClick,
         zIndex: isOverlay ? 999 : "auto"
       }}
       onMouseEnter={() => !isDragging && !isOverlay && setHover(true)}
-      onMouseLeave={() => { setHover(false); updateMemo(refItem.id, localMemo); }}
+      onMouseLeave={() => {setHover(false);}}
       {...attributes}
       {...listeners}
     >
@@ -1704,7 +1705,18 @@ const ReferenceCard = React.memo(({ refItem, index, updateMemo, remove, onClick,
           src={refItem.image} 
           onClick={() => onClick(index)} 
           alt=""
-          style={{ width: "100%", display: "block", cursor: "zoom-in", transition: "transform 0.2s ease", transform: hover && !isDragging && !isOverlay ? "scale(1.01)" : "scale(1)" }} 
+          style={{
+  width: "100%",
+  display: "block",
+  maxHeight: maxImageHeight,
+  objectFit: "cover",
+  cursor: "zoom-in",
+  transition: "transform 0.2s ease",
+  transform:
+    hover && !isDragging && !isOverlay
+      ? "scale(1.01)"
+      : "scale(1)",
+}}
         />
         <button
           onPointerDown={(e) => e.stopPropagation()}
@@ -1719,34 +1731,6 @@ const ReferenceCard = React.memo(({ refItem, index, updateMemo, remove, onClick,
           <X size={12} color={COLOR.text} />
         </button>
       </div>
-      
-      {(hover || localMemo || isOverlay) && (
-        <div style={{ marginTop: 6, padding: "0 2px" }}>
-          {hover && !isDragging && !isOverlay ? (
-            <input
-              onPointerDown={(e) => e.stopPropagation()}
-              value={localMemo}
-              onChange={(e) => setLocalMemo(e.target.value)}
-              onBlur={() => updateMemo(refItem.id, localMemo)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') updateMemo(refItem.id, localMemo);
-                e.stopPropagation();
-              }}
-              placeholder="Add memo..."
-              style={{
-                width: "100%", fontSize: 11.5, border: "none", background: "transparent",
-                color: COLOR.text, outline: "none", padding: "4px 2px",
-                borderBottom: `1px solid ${COLOR.border}`, transition: "border-color 0.2s"
-              }}
-              onFocus={(e) => e.target.style.borderBottomColor = COLOR.text}
-            />
-          ) : (
-            <div style={{ fontSize: 11.5, color: COLOR.subtext, padding: "5px 2px", minHeight: 24, wordBreak: "break-word" }}>
-              {localMemo}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 });
@@ -1784,15 +1768,13 @@ interface ReferenceManagerProps {
 }
 const ReferenceManager = React.memo(({ itemId }: ReferenceManagerProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const MAX_REFERENCE_COUNT = 6;
   const [references, setReferences] = useState<ReferenceImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const dragCounter = useRef(0);
-
-  const lastSavedData = useRef("[]");
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1802,94 +1784,105 @@ const ReferenceManager = React.memo(({ itemId }: ReferenceManagerProps) => {
   useEffect(() => {
     (async () => {
       const all = await storeListLoad<ReferenceImage>("reference:");
-      const filtered = all.filter(r => r.itemId === itemId).sort((a,b) => a.order - b.order);
+      const filtered = all
+        .filter(r => r.itemId === itemId)
+        .sort((a,b) => a.order - b.order);
       setReferences(filtered);
-      lastSavedData.current = JSON.stringify(filtered);
       setLoading(false);
     })();
   }, [itemId]);
 
-  const isDirty = useMemo(() => JSON.stringify(references) !== lastSavedData.current, [references]);
+const createRefs = async (files: File[]) => {
+  const available = Math.max(
+    0,
+    MAX_REFERENCE_COUNT - references.length
+  );
+  if (available === 0) return [];
+  const targetFiles = files.slice(0, available);
+  const compressed = await Promise.all(
+    targetFiles.map((f) =>
+      fileToCompressedDataUrl(f, 1000, 0.8)
+    )
+  );
+  return compressed.map((image, idx) => ({
+    id: crypto.randomUUID(),
+    itemId,
+    image,
+    memo: "",
+    order: references.length + idx,
+    createdAt: Date.now(),
+  }));
+};
 
-  // Unsaved Protection: Window close/refresh
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
-
-  useEffect(() => {
-    if (loading) return;
-    const currentString = JSON.stringify(references);
-    if (currentString !== lastSavedData.current) {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(async () => {
-        for (const r of references) {
-          await storeSet(`reference:${r.id}`, JSON.stringify(r));
-        }
-        lastSavedData.current = currentString;
-        timeoutRef.current = null;
-      }, 700);
+  
+const handlePaste = async (e: ClipboardEvent) => {
+  const target = e.target as HTMLElement;
+  if (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA"
+  ) {
+    return;
+  }
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  const files: File[] = [];
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith("image")) {
+      const file = items[i].getAsFile();
+      if (file) files.push(file);
     }
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        references.forEach(r => storeSet(`reference:${r.id}`, JSON.stringify(r)));
-        timeoutRef.current = null;
-      }
-    };
-  }, [references, loading]);
-
-  const createRefs = async (files: File[]) => {
-    const compressed = await Promise.all(files.map((f) => fileToCompressedDataUrl(f, 1000, 0.8)));
-    return compressed.map((image, idx) => ({
-      id: crypto.randomUUID(),
-      itemId,
-      image,
-      memo: "",
-      order: references.length + idx,
-      createdAt: Date.now()
+  }
+  if (
+    files.length === 0 ||
+    references.length >= MAX_REFERENCE_COUNT
+  ) {
+    return;
+  }
+  try {
+    const newRefs = await createRefs(files);
+    const next = [...references, ...newRefs].map((r, i) => ({
+      ...r,
+      order: i,
     }));
-  };
+    setReferences(next);
+    for (const r of newRefs) {
+      await storeSet(
+        `reference:${r.id}`,
+        JSON.stringify(r)
+      );
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
 
-  useEffect(() => {
-    const handlePaste = async (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      const files: File[] = [];
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf("image") !== -1) {
-          const file = items[i].getAsFile();
-          if (file) files.push(file);
-        }
-      }
-      if (files.length > 0) {
-        try {
-          const newRefs = await createRefs(files);
-          setReferences(prev => [...prev, ...newRefs].map((r, i) => ({ ...r, order: i })));
-        } catch (err) {}
-      }
-    };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
   }, [references.length, itemId]); 
 
-  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    try {
-      const newRefs = await createRefs(files);
-      setReferences(prev => [...prev, ...newRefs].map((r, i) => ({ ...r, order: i })));
-    } catch (err) {}
+const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  if (references.length >= MAX_REFERENCE_COUNT) {
     e.target.value = "";
-  };
+    return;
+  }
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  try {
+    const newRefs = await createRefs(files);
+    const next = [...references, ...newRefs].map((r, i) => ({
+      ...r,
+      order: i,
+    }));
+    setReferences(next);
+    for (const r of newRefs) {
+      await storeSet(`reference:${r.id}`, JSON.stringify(r));
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  e.target.value = "";
+};
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1914,44 +1907,91 @@ const ReferenceManager = React.memo(({ itemId }: ReferenceManagerProps) => {
     e.stopPropagation();
   };
 
-  const handleContainerDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    dragCounter.current = 0;
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-    if (files.length > 0) {
-      try {
-        const newRefs = await createRefs(files);
-        setReferences(prev => [...prev, ...newRefs].map((r, i) => ({ ...r, order: i })));
-      } catch(err) {}
+const handleContainerDrop = async (
+  e: React.DragEvent<HTMLDivElement>
+) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDragActive(false);
+  dragCounter.current = 0;
+  const files = Array.from(e.dataTransfer.files).filter((f) =>
+    f.type.startsWith("image/")
+  );
+  if (references.length >= MAX_REFERENCE_COUNT) {
+    return;
+  }
+  if (!files.length) {
+    return;
+  }
+  try {
+    const newRefs = await createRefs(files);
+    const next = [...references, ...newRefs].map((r, i) => ({
+      ...r,
+      order: i,
+    }));
+    setReferences(next);
+    for (const r of newRefs) {
+      await storeSet(
+        `reference:${r.id}`,
+        JSON.stringify(r)
+      );
     }
-  };
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const updateMemo = useCallback((id: string, memo: string) => {
     setReferences(prev => prev.map(r => r.id === id ? { ...r, memo } : r));
   }, []);
 
-  const remove = useCallback(async (id: string) => {
-    setReferences(prev => prev.filter(r => r.id !== id).map((r, i) => ({ ...r, order: i })));
-    await storeDelete(`reference:${id}`);
-  }, []);
+const remove = useCallback(async (id: string) => {
+  const next = references
+    .filter((r) => r.id !== id)
+    .map((r, i) => ({
+      ...r,
+      order: i,
+    }));
+  setReferences(next);
+  await storeDelete(`reference:${id}`);
+  for (const r of next) {
+    await storeSet(
+      `reference:${r.id}`,
+      JSON.stringify(r)
+    );
+  }
+}, [references]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id));
   }, []);
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      setReferences((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex).map((r, i) => ({ ...r, order: i }));
-      });
+const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+  const { active, over } = event;
+  if (over && active.id !== over.id) {
+    const oldIndex = references.findIndex(
+      (i) => i.id === active.id
+    );
+    const newIndex = references.findIndex(
+      (i) => i.id === over.id
+    );
+    const next = arrayMove(
+      references,
+      oldIndex,
+      newIndex
+    ).map((r, i) => ({
+      ...r,
+      order: i,
+    }));
+    setReferences(next);
+    for (const r of next) {
+      await storeSet(
+        `reference:${r.id}`,
+        JSON.stringify(r)
+      );
     }
-    setActiveId(null);
-  }, []);
+  }
+  setActiveId(null);
+}, [references]);
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
@@ -1972,17 +2012,6 @@ const ReferenceManager = React.memo(({ itemId }: ReferenceManagerProps) => {
       onDrop={handleContainerDrop}
       style={{ minHeight: 200, position: "relative" }}
     >
-      {dragActive && (
-        <div style={{
-          position: "absolute", inset: 0, zIndex: 1000,
-          background: "rgba(250, 250, 248, 0.85)",
-          border: `2px dashed ${COLOR.subtext}`,
-          borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 14, fontWeight: 500, color: COLOR.text
-        }}>
-          Drop images here
-        </div>
-      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -1990,34 +2019,72 @@ const ReferenceManager = React.memo(({ itemId }: ReferenceManagerProps) => {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div style={{ columnCount: 2, columnGap: 16 }}>
-          <SortableContext items={references.map(r => r.id)} strategy={rectSortingStrategy}>
-            {references.map((ref, idx) => (
-              <SortableReferenceCard 
-                key={ref.id} 
-                refItem={ref} 
-                index={idx} 
-                updateMemo={updateMemo} 
-                remove={remove} 
-                onClick={setViewerIndex} 
-              />
-            ))}
-          </SortableContext>
-          {/* Placeholder Add Card */}
-          <div
-            onClick={() => inputRef.current?.click()}
-            style={{
-              breakInside: "avoid", marginBottom: 16, cursor: "pointer",
-              height: 120, background: COLOR.bg2, borderRadius: 6,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              border: `1px dashed ${COLOR.border}`, transition: "all 0.2s ease"
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = COLOR.border; e.currentTarget.style.borderColor = COLOR.subtext; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = COLOR.bg2; e.currentTarget.style.borderColor = COLOR.border; }}
-          >
-            <ImageIcon size={20} color={COLOR.subtext} />
-          </div>
+<div
+  style={{
+    position: "relative",
+    columnCount: 2,
+    columnGap: 16,
+  }}
+>
+     {dragActive && references.length < MAX_REFERENCE_COUNT && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 1000,
+          background: "rgba(250, 250, 248, 0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 14, fontWeight: 500, color: COLOR.text
+        }}>
+          Drop images here
         </div>
+      )}
+
+  <SortableContext
+    items={references.map((r) => r.id)}
+    strategy={rectSortingStrategy}
+  >
+    {references.map((ref, idx) => (
+      <SortableReferenceCard
+        key={ref.id}
+        refItem={ref}
+        index={idx}
+        updateMemo={updateMemo}
+        remove={remove}
+        onClick={setViewerIndex}
+      />
+    ))}
+  </SortableContext>
+
+  {references.length < MAX_REFERENCE_COUNT && (
+    <div
+      onClick={() => inputRef.current?.click()}
+      style={{
+        breakInside: "avoid",
+        marginBottom: 16,
+        cursor: "pointer",
+        height: 120,
+        background: COLOR.bg2,
+        borderRadius: 6,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: `1px dashed ${COLOR.border}`,
+        transition: "all 0.2s ease",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = COLOR.border;
+        e.currentTarget.style.borderColor = "#fcfcfcc4";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "#fcfcfc";
+        e.currentTarget.style.borderColor = "#fcfcfc";
+      }}
+    >
+      <ImageIcon
+        size={20}
+        color={"#0000003c"}
+      />
+    </div>
+  )}
+</div>
 
         <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: "0.4" } } }) }}>
           {activeId && activeRefItem ? (
@@ -2440,7 +2507,7 @@ return (
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "22px 28px",
+            padding: "12px 28px",
             borderBottom: `1px solid ${COLOR.border}`,
           }}
         >
