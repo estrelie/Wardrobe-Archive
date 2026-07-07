@@ -1107,8 +1107,10 @@ function ImageManager({ images, onChange }: ImageManagerProps) {
 const inputRef = useRef<HTMLInputElement>(null);
 const [busy, setBusy] = useState(false);
 const [dragActive, setDragActive] = useState(false);
-/** 현재 크게 보고 있는 사진 */
-const [currentIndex, setCurrentIndex] = useState(0);
+/** 현재 크게 보고 있는 사진 (상세 모달 전용) */
+const [previewIndex, setPreviewIndex] = useState(0);
+const [imageHover, setImageHover] = useState(false);
+const [hoverThumbIndex, setHoverThumbIndex] = useState<number | null>(null);
 /** 드래그 중인 썸네일 */
 const [activeId, setActiveId] = useState<string | null>(null);
 const dragCounter = useRef(0);
@@ -1120,7 +1122,11 @@ const THUMB_COUNT = 5;
     setBusy(true);
     try {
       const compressed = await Promise.all(files.map((f) => fileToCompressedDataUrl(f)));
-      onChange([...images, ...compressed]);
+      const available = MAX_IMAGE_COUNT - images.length;
+onChange([
+  ...images,
+  ...compressed.slice(0, available),
+]);
     } catch (err) {
       console.error("image processing failed", err);
     } finally {
@@ -1129,14 +1135,52 @@ const THUMB_COUNT = 5;
     }
   };
   
-  const setMain = (idx: number) => {
-    if (idx === 0) return;
-    const next = [...images];
-    const [pick] = next.splice(idx, 1);
-    next.unshift(pick);
-    onChange(next);
-  };
-  const remove = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+const setMain = (idx: number) => {
+  setPreviewIndex(idx);
+};
+
+const prevImage = () => {
+  if (previewIndex > 0) {
+    setPreviewIndex(previewIndex - 1);
+  }
+};
+
+const nextImage = () => {
+  if (previewIndex < images.length - 1) {
+    setPreviewIndex(previewIndex + 1);
+  }
+};
+
+const THUMB_VISIBLE_COUNT =7;
+const MAX_IMAGE_COUNT = 7;
+
+const thumbStart = Math.max(
+  0,
+  Math.min(
+    previewIndex - Math.floor(THUMB_VISIBLE_COUNT / 2),
+    Math.max(0, images.length - THUMB_VISIBLE_COUNT)
+  )
+);
+
+const visibleImages = images.slice(
+  thumbStart,
+  thumbStart + THUMB_VISIBLE_COUNT
+);
+
+const remove = (idx: number) => {
+
+const next = images.filter((_, i) => i !== idx);
+
+  if (next.length === 0) {
+    setPreviewIndex(0);
+  } else if (previewIndex > idx) {
+    setPreviewIndex(previewIndex - 1);
+  } else if (previewIndex === idx) {
+    setPreviewIndex(Math.min(previewIndex, next.length - 1));
+  }
+
+  onChange(next);
+};
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1172,7 +1216,11 @@ const THUMB_COUNT = 5;
     setBusy(true);
     try {
       const compressed = await Promise.all(files.map((f) => fileToCompressedDataUrl(f)));
-      onChange([...images, ...compressed]);
+      const available = MAX_IMAGE_COUNT - images.length;
+onChange([
+  ...images,
+  ...compressed.slice(0, available),
+]);
     } catch (err) {
       console.error("image processing failed", err);
     } finally {
@@ -1183,53 +1231,190 @@ const THUMB_COUNT = 5;
   return (
     <div 
       className="fade-tab" 
-      style={{ position: "relative" }}
+      style={{
+        position: "relative",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: 0,
+      }}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {dragActive && (
-        <div style={{
-          position: "absolute", inset: 0, zIndex: 50,
-          background: "rgba(250, 250, 248, 0.85)",
-          border: `2px dashed ${COLOR.subtext}`,
-          borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 14, fontWeight: 500, color: COLOR.text
-        }}>
-          Drop images here
-        </div>
-      )}
-      <div style={{
-        width: "100%", aspectRatio: "4 / 5", background: COLOR.bg2, borderRadius: 6,
-        overflow: "hidden", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        {images[0]
-          ? <img src={images[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <span style={{ fontSize: 12.5, color: COLOR.subtext }}>{busy ? "..." : ""}</span>}
-      </div>
+{dragActive && images.length < MAX_IMAGE_COUNT && (
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      zIndex: 50,
+      background: "rgba(250, 250, 248, 0.85)",
+      border: `2px dashed ${COLOR.subtext}`,
+      borderRadius: 6,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 14,
+      fontWeight: 500,
+      color: COLOR.text,
+    }}
+  >
+    Drop images here
+  </div>
+)}
+
+<div
+  onMouseEnter={() => setImageHover(true)}
+  onMouseLeave={() => setImageHover(false)}
+
+  style={{
+    position: "relative",
+    width: "100%",
+    background: COLOR.bg2,
+    borderRadius: 6,
+    overflow: "hidden",
+    flex: 1,
+    minHeight: 0,
+    marginBottom: 0,
+  }}
+>
+  {images[previewIndex] ? (
+    <img
+      src={images[previewIndex]}
+      alt=""
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+      }}
+    />
+  ) : (
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: COLOR.subtext,
+        fontSize: 12,
+      }}
+    >
+      {busy ? "..." : ""}
+    </div>
+  )}
+
+{/* 이전 */}
+{previewIndex > 0 && (
+  <button
+    type="button"
+    onClick={prevImage}
+    style={{
+      position: "absolute",
+      left: 10,
+      top: "50%",
+      transform: imageHover
+  ? "translateY(-50%) scale(1)"
+  : "translateY(-50%) scale(1)",
+      width: 40,
+      height: 43,
+      borderRadius: "50%",
+      border: "none",
+      background: "rgba(0, 0, 0, 0.22)",
+      backdropFilter: "blur(6px)",
+      color: "#ffffffd0",
+      cursor: "pointer",
+      opacity: imageHover ? 1 : 0,
+      transition: "opacity .2s ease, transform .2s ease",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2,
+    }}
+  >
+    <ChevronLeft size={20} strokeWidth={2.2} style={{ transform: "translateX(-1px)" }}/>
+  </button>
+)}
+
+{/* 다음 */}
+{previewIndex < images.length - 1 && (
+  <button
+    type="button"
+    onClick={nextImage}
+    style={{
+      position: "absolute",
+      right: 10,
+      top: "50%",
+      transform: imageHover
+  ? "translateY(-50%) scale(1)"
+  : "translateY(-50%) scale(1)",
+      width: 40,
+      height: 43,
+      borderRadius: "50%",
+      border: "none",
+      background: "rgba(0, 0, 0, 0.22)",
+      backdropFilter: "blur(6px)",
+      color: "#ffffffd0",
+      cursor: "pointer",
+      opacity: imageHover ? 1 : 0,
+      transition: "opacity .2s ease, transform .2s ease",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2,
+    }}
+  >
+    <ChevronRight size={20} strokeWidth={2.2} style={{ transform: "translateX(1px)" }}/>
+  </button>
+)}
+</div>
 
 <div
   style={{
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    overflowX: "auto",
-    paddingTop: 2,
-    paddingBottom: 2,
-    scrollbarWidth: "thin",
+    textAlign: "center",
+    fontSize: 11,
+    letterSpacing: 0.5,
+    color: COLOR.subtext,
+    marginTop: 12,
+    marginBottom: 12,
+    lineHeight: 1,
+    flexShrink: 0,
   }}
 >
-  {images.map((src, idx) => (
-    <div
-      key={idx}
-      style={{
-        position: "relative",
-        flex: "0 0 auto",
-        width: 58,
-        height: 72,
-      }}
-    >
+  {images.length > 0
+    ? `${previewIndex + 1} / ${images.length}`
+    : "0 / 0"}
+</div>
+
+<div style={{
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: 6,
+  paddingTop: 0,
+  paddingBottom: 16,
+  flexShrink: 0,
+}}>
+
+{visibleImages.map((src, localIdx) => {
+  const idx = thumbStart + localIdx;
+
+  return (
+<div
+  key={idx}
+  onMouseEnter={() => setHoverThumbIndex(idx)}
+  onMouseLeave={() => setHoverThumbIndex(null)}
+  style={{
+    position: "relative",
+    overflow: "hidden",
+    flex: "0 0 auto",
+    width: 42,
+    height: 54,
+  }}
+>
       <img
         src={src}
         alt=""
@@ -1240,44 +1425,56 @@ const THUMB_COUNT = 5;
           objectFit: "cover",
           borderRadius: 4,
           cursor: "pointer",
-          border:
-            idx === 0
-              ? `2px solid ${COLOR.text}`
-              : `1px solid ${COLOR.border}`,
-        }}
-      />
+          opacity: idx === previewIndex ? 1 : 0.45,
+          transform: idx === previewIndex
+            ? "scale(1.05)"
+            : "scale(1)",
+          transition:
+          "opacity .18s ease, transform .18s ease, box-shadow .18s ease",
+          border: "1px solid transparent",
+          boxShadow: idx === previewIndex
+            ? "0 4px 12px rgba(0, 0, 0, 0.12)"
+            : "none",
+        }}/>
 
-      <button
-        type="button"
-        onClick={() => remove(idx)}
-        style={{
-          position: "absolute",
-          top: -6,
-          right: -6,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: "#fff",
-          border: `1px solid ${COLOR.border}`,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 0,
-        }}
-      >
-        <X size={9} />
-      </button>
+<button
+  type="button"
+  onClick={() => remove(idx)}
+  style={{
+    position: "absolute",
+    top: 3,
+    right: 2,
+    width: 16,
+    height: 16,
+    padding: 0,
+    border: "none",
+    background: "transparent",
+    color: "rgba(255, 255, 255, 0.98)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    opacity: hoverThumbIndex === idx ? 1 : 0,
+    transition: "opacity .15s ease",
+    zIndex: 3,
+    textShadow: "0 1px 3px rgba(0,0,0,.65)",
+  }}
+>
+  <X size={10} strokeWidth={3} />
+</button>
+
     </div>
-  ))}
+  );
+})}
 
+{images.length < MAX_IMAGE_COUNT && (
   <button
     type="button"
     onClick={() => inputRef.current?.click()}
     style={{
       flex: "0 0 auto",
-      width: 58,
-      height: 72,
+      width: 40,
+      height: 50,
       border: `1px dashed ${COLOR.border}`,
       borderRadius: 4,
       background: COLOR.bg,
@@ -1289,6 +1486,7 @@ const THUMB_COUNT = 5;
   >
     <Plus size={16} color={COLOR.subtext} />
   </button>
+)}
 
   <input
     ref={inputRef}
@@ -3109,7 +3307,7 @@ function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, items }:
             <ClothingCard key={item.id} item={item} onOpen={() => {}} onToggleFavorite={() => {}} accentColor={draft.color} />
           ))}
           {stats.recentItems.length === 0 && (
-            <div style={{ gridColumn: "1 / -1", padding: "40px 0", textAlign: "center", color: COLOR.subtext, fontSize: 13, background: COLOR.bg2, borderRadius: 6 }}>
+            <div style={{ gridColumn: "1 / -1", padding: "40px 0", textAlign: "center", color: COLOR.subtext, fontSize: 12, background: COLOR.bg2, borderRadius: 6 }}>
               No items
             </div>
           )}
@@ -5100,6 +5298,7 @@ export default function App() {
         }
         .minimal-slider:focus::-webkit-slider-thumb {
           transform: scale(1.2);
+          
         }
       `}</style>
       
