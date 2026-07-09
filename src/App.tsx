@@ -661,11 +661,72 @@ interface FieldProps {
   label: string;
   style?: React.CSSProperties;
   children: React.ReactNode;
+  horizontal?: boolean;
 }
-function Field({ label, style, children }: FieldProps) {
+
+function Field({
+  label,
+  style,
+  children,
+  horizontal = false,
+}: FieldProps) {
+  if (horizontal) {
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "90px 1fr",
+          alignItems: "center",
+          columnGap: 14,
+          marginBottom: 16,
+          ...style,
+        }}
+      >
+<div
+  style={{
+    fontSize: 12,
+    fontWeight: 500,
+    color: "#757575",
+    textTransform: "lowercase",
+    paddingLeft: 5,
+    display: "flex",
+    alignItems: "center",
+    height: 40,
+    textAlign: "left",
+  }}
+>
+  {label}
+</div>
+<div
+  style={{
+    paddingRight: 1,
+  }}
+>
+  {children}
+</div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ marginBottom: 14, ...style }}>
-      <div style={{ fontSize: 12, color: COLOR.subtext, marginBottom: 6, letterSpacing: 0.2 }}>{label}</div>
+    <div
+      style={{
+        marginBottom: 20,
+        ...style,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 500,
+          color: "#757575",
+          letterSpacing: "0.02em",
+          textTransform: "lowercase",
+          marginBottom: 7,
+        }}
+      >
+        {label}
+      </div>
       {children}
     </div>
   );
@@ -690,10 +751,16 @@ function Select(props: SelectProps) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      fontSize: 12, color: COLOR.subtext, letterSpacing: 0.4, margin: "22px 0 12px",
-      paddingBottom: 8, borderBottom: `1px solid ${COLOR.border}`,
-    }}>{children}</div>
+    <div
+      style={{
+        fontSize: 13,
+        fontWeight: 450,
+        color: COLOR.text,
+        margin: "20px 0 20px",
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -795,6 +862,7 @@ interface SeasonPickerProps {
   value: Season[];
   onChange: (val: Season[]) => void;
 }
+
 function SeasonPicker({ value, onChange }: SeasonPickerProps) {
   const toggle = (s: Season) => {
     const set = new Set(value);
@@ -802,14 +870,31 @@ function SeasonPicker({ value, onChange }: SeasonPickerProps) {
     onChange(Array.from(set));
   };
   return (
-    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 18, }}>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "flex-start",
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap",
+      }}
+    >
       {SEASONS.map((s) => (
-        <button key={s} type="button" onClick={() => toggle(s)} style={{
-          padding: "7px 12px", fontSize: 12.5, borderRadius: 6, cursor: "pointer",
-          border: `1px solid ${value.includes(s) ? COLOR.text : COLOR.border}`,
-          background: value.includes(s) ? COLOR.text : COLOR.bg,
-          color: value.includes(s) ? "#fff" : COLOR.text,
-        }}>
+        <button
+          key={s}
+          type="button"
+          onClick={() => toggle(s)}
+          style={{
+            padding: "7px 12px",
+            fontSize: 12.5,
+            borderRadius: 6,
+            cursor: "pointer",
+            border: `1px solid ${value.includes(s) ? COLOR.text : COLOR.border}`,
+            background: value.includes(s) ? COLOR.text : COLOR.bg,
+            color: value.includes(s) ? "#fff" : COLOR.text,
+            transition: "all .15s",
+          }}
+        >
           {s}
         </button>
       ))}
@@ -821,8 +906,16 @@ interface BrandInputProps {
   value: string;
   onChange: (val: string) => void;
   brands: string[];
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
-function BrandInput({ value, onChange, brands }: BrandInputProps) {
+function BrandInput({
+  value,
+  onChange,
+  brands,
+  onFocus,
+  onBlur,
+}: BrandInputProps) {
   const [focused, setFocused] = useState(false);
   const suggestions = useMemo(() => {
     const q = value.trim().toLowerCase();
@@ -836,8 +929,16 @@ function BrandInput({ value, onChange, brands }: BrandInputProps) {
       <TextInput
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setTimeout(() => setFocused(false), 120)}
+        onFocus={() => {
+          setFocused(true);
+          onFocus?.();
+        }}
+        onBlur={() =>
+          setTimeout(() => {
+            setFocused(false);
+            onBlur?.();
+          }, 120)
+        }
         placeholder=""
       />
       {focused && suggestions.length > 0 && (
@@ -884,6 +985,7 @@ interface BrandLogoPickerProps {
 function BrandLogoPicker({ value, onChange }: BrandLogoPickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -901,7 +1003,14 @@ function BrandLogoPicker({ value, onChange }: BrandLogoPickerProps) {
   };
 
   return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
+    <div
+  style={{
+    position: "relative",
+    flexShrink: 0,
+  }}
+  onMouseEnter={() => setHovered(true)}
+  onMouseLeave={() => setHovered(false)}
+>
       <div
         onClick={() => inputRef.current?.click()}
         style={{
@@ -916,13 +1025,13 @@ function BrandLogoPicker({ value, onChange }: BrandLogoPickerProps) {
             ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
             : <ImageIcon size={14} color={COLOR.subtext} />}
       </div>
-      {value && !busy && (
+      {value && !busy && hovered && (
         <button type="button" onClick={() => onChange("")} style={{
-          position: "absolute", top: -6, right: -6, width: 15, height: 15, borderRadius: "50%",
-          background: "#fff", border: `1px solid ${COLOR.border}`, cursor: "pointer",
+          position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%",
+          background: "rgba(255,255,255,0.92)", border: `1px solid ${COLOR.border}`, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
         }}>
-          <X size={9} />
+          <X size={11} strokeWidth={2} />
         </button>
       )}
       <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
@@ -938,7 +1047,8 @@ interface FormBrandSectionProps {
   newLogo: string;
   setNewLogo: (val: string) => void;
 }
-function FormBrandSection({ formBrandName, brands, newTier, setNewTier, newLogo, setNewLogo }: FormBrandSectionProps) {
+function FormBrandSection({ formBrandName, brands, newTier, setNewTier, newLogo, setNewLogo }
+  : FormBrandSectionProps) {
   const matchedBrand = brands.find(b => b.name === formBrandName);
 
   if (!formBrandName) return null;
@@ -947,17 +1057,51 @@ function FormBrandSection({ formBrandName, brands, newTier, setNewTier, newLogo,
     return null;
   }
 
-  return (
-    <div style={{ marginTop: 10, padding: 12, background: COLOR.bg2, borderRadius: 6, border: `1px dashed ${COLOR.border}` }}>
-      <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 10, color: COLOR.text }}>Add New Brand ({formBrandName})</div>
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <BrandLogoPicker value={newLogo} onChange={setNewLogo} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: COLOR.subtext, marginBottom: 4 }}>Tier (Required)</div>
-          <Select value={newTier} onChange={e => setNewTier(e.target.value)}>
-            {BRAND_TIERS.map((t) => <option key={t}>{t}</option>)}
-          </Select>
-        </div>
+return (
+  <div
+    style={{
+      padding: "10px 10px 14px",
+      background: COLOR.bg2,
+      borderRadius: 8,
+      border: `1px dashed ${COLOR.border}`,
+    }}
+  >
+      <div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "52px 1fr",
+    gap: 10,
+    alignItems: "stretch",
+  }}
+>
+<div
+  style={{
+    height: 38,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  }}
+>
+  <BrandLogoPicker
+    value={newLogo}
+    onChange={setNewLogo}
+  />
+</div>
+<div style={{ flex: 1 }}>
+  <Select
+    value={newTier}
+    onChange={e => setNewTier(e.target.value)}
+      style={{
+    height: 38,
+    paddingTop: 0,
+    paddingBottom: 0,
+  }}
+  >
+    {BRAND_TIERS.map((t) => (
+      <option key={t}>{t}</option>
+    ))}
+  </Select>
+</div>
       </div>
     </div>
   );
@@ -2398,6 +2542,9 @@ interface DrawerProps {
 function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialLibrary, onAddMaterialToLibrary, materialFreq }: DrawerProps) {
   const [mediaTab, setMediaTab] = useState("photos");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showBrandSection, setShowBrandSection] = useState(false);
+  const brandInputRef = useRef<HTMLDivElement>(null);
+  const brandPanelRef = useRef<HTMLDivElement>(null);
 
   const [delReason, setDelReason] = useState<DeletionReason | string>("판매");
   const [soldPrice, setSoldPrice] = useState<number | "">("");
@@ -2410,30 +2557,44 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
     setSoldDate(new Date().toISOString().split('T')[0]);
   }, [item.id]);
 
+  useEffect(() => {
+const handleMouseDown = (e: MouseEvent) => {
+  const target = e.target as Node;
+  const clickedInput =
+    brandInputRef.current?.contains(target) ?? false;
+  const clickedPanel =
+    brandPanelRef.current?.contains(target) ?? false;
+  if (
+    showBrandSection &&
+    !clickedInput &&
+    !clickedPanel
+  ) {
+    setShowBrandSection(false);
+  }
+};
+  document.addEventListener("mousedown", handleMouseDown);
+  return () => {
+    document.removeEventListener("mousedown", handleMouseDown);
+  };
+}, [showBrandSection]);
+
   const { draft, setDraft, status, forceSave } = useAutoSave<ClothingDraft>(
     { ...item, _newBrandTier: BRAND_TIERS[5], _newBrandLogo: "" },
     (dataToSave) => {
       let targetBrandId = dataToSave.brandId;
       const matchedBrand = brands.find(b => b.name === dataToSave.brandName);
       
-      if (dataToSave.brandName) {
-        if (matchedBrand) {
-          targetBrandId = matchedBrand.id;
-        } else {
-          targetBrandId = crypto.randomUUID();
-          onAddBrand({
-            id: targetBrandId,
-            name: dataToSave.brandName,
-            tier: dataToSave._newBrandTier || BRAND_TIERS[5],
-            logo: dataToSave._newBrandLogo || "",
-            memo: "",
-            favorite: false,
-            color: "#B8B8B8"
-          });
-        }
-      } else {
-        targetBrandId = "";
-      }
+ if (dataToSave.brandName) {
+  if (matchedBrand) {
+    targetBrandId = matchedBrand.id;
+  } else {
+    // Drawer에서는 새 브랜드를 생성하지 않는다
+    // 닫을 때(handleClose) 한 번만 생성한다
+    targetBrandId = "";
+  }
+} else {
+  targetBrandId = "";
+}
 
       const toSave: Partial<ClothingDraft> = { ...dataToSave, brandId: targetBrandId };
       delete toSave.brandInfo; 
@@ -2445,10 +2606,28 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
     (i) => i.id
   );
 
-  const handleClose = useCallback(() => {
-    forceSave();
-    onClose();
-  }, [forceSave, onClose]);
+const handleClose = useCallback(() => {
+  const matchedBrand = brands.find((b) => b.name === draft.brandName);
+
+  if (draft.brandName && !matchedBrand) {
+    const newBrandId = crypto.randomUUID();
+    onAddBrand({
+      id: newBrandId,
+      name: draft.brandName,
+      tier: draft._newBrandTier || BRAND_TIERS[5],
+      logo: draft._newBrandLogo || "",
+      memo: "",
+      favorite: false,
+      color: "#B8B8B8",
+    });
+    setDraft((d) => ({
+      ...d,
+      brandId: newBrandId,
+    }));
+  }
+  forceSave();
+  onClose();
+}, [draft, brands, onAddBrand, forceSave, onClose, setDraft]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2489,7 +2668,7 @@ return (
     >
       <div
         style={{
-          width: 1180,
+          width: 970,
           maxWidth: "95vw",
           height: "90vh",
           background: COLOR.bg,
@@ -2620,7 +2799,6 @@ return (
                     src={draft.brandInfo?.logo}
                     size={19}
                   />
-
                   <div
                     style={{
                       fontSize: 20,
@@ -2631,7 +2809,6 @@ return (
                     {draft.brandName || ""}
                   </div>
                 </div>
-
                 <div
                   style={{
                     fontSize: 14,
@@ -2642,7 +2819,6 @@ return (
                   {draft.name || ""}
                 </div>
               </div>
-
               <button
                 onClick={() =>
                   setDraft((d) => ({
@@ -2665,25 +2841,90 @@ return (
               </button>
             </div>
 
-        <SectionTitle>Basic Info</SectionTitle>
-        <Field label="Brand">
-          <BrandInput value={draft.brandName} onChange={(v) => setField("brandName", v)} brands={brands.map(b => b.name)} />
-          <FormBrandSection 
-            formBrandName={draft.brandName} brands={brands} 
-            newTier={draft._newBrandTier || ""} setNewTier={(v) => setField("_newBrandTier", v)} 
-            newLogo={draft._newBrandLogo || ""} setNewLogo={(v) => setField("_newBrandLogo", v)} 
-          />
-        </Field>
-        
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Product Name"><TextInput value={draft.name} onChange={set("name")} /></Field>
-          <Field label="Category">
-            <Select value={draft.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
-          </Field>
-          <Field label="Season" style={{ gridColumn: "1 / -1" }}>
-            <SeasonPicker value={draft.seasons} onChange={(v) => setField("seasons", v)} />
-          </Field>
-        </div>
+<SectionTitle>Basic Info</SectionTitle>
+
+<div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+  }}
+>
+
+<>
+<Field
+  horizontal
+  label="brand"
+  style={{
+    marginBottom: showBrandSection ? 0 : 16,
+  }}
+>
+    <div ref={brandInputRef}>
+      <BrandInput
+        value={draft.brandName}
+        onChange={(v) => setField("brandName", v)}
+        brands={brands.map((b) => b.name)}
+        onFocus={() => setShowBrandSection(true)}
+      />
+    </div>
+  </Field>
+
+  {showBrandSection && (
+    <div
+      ref={brandPanelRef}
+      style={{
+        marginLeft: 104,
+        marginTop: 0,
+        marginBottom: 16,
+      }}
+    >
+      <FormBrandSection
+        formBrandName={draft.brandName}
+        brands={brands}
+        newTier={draft._newBrandTier || ""}
+        setNewTier={(v) => setField("_newBrandTier", v)}
+        newLogo={draft._newBrandLogo || ""}
+        setNewLogo={(v) => setField("_newBrandLogo", v)}
+      />
+    </div>
+  )}
+</>
+
+  <Field
+    horizontal
+    label="product"
+  >
+    <TextInput
+      value={draft.name}
+      onChange={set("name")}
+      onFocus={() => setShowBrandSection(false)}
+    />
+  </Field>
+
+  <Field
+    horizontal
+    label="category"
+  >
+    <Select
+      value={draft.category}
+      onChange={set("category")}
+      onFocus={() => setShowBrandSection(false)}
+    >
+      {CATEGORIES.map((c) => (
+        <option key={c}>{c}</option>
+      ))}
+    </Select>
+  </Field>
+
+  <Field
+    horizontal
+    label="season"
+  >
+    <SeasonPicker
+      value={draft.seasons}
+      onChange={(v) => setField("seasons", v)}
+    />
+  </Field>
+</div>
 
         <SectionTitle>Purchase Info</SectionTitle>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
