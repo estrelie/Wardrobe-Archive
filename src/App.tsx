@@ -741,7 +741,28 @@ const inputStyle: React.CSSProperties = {
 
 interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 function TextInput(props: TextInputProps) {
-  return <input {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
+  return (
+    <>
+      <style>{`
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type="number"] {
+          -moz-appearance: textfield;
+          appearance: textfield;
+        }
+      `}</style>
+      <input
+        {...props}
+        style={{
+          ...inputStyle,
+          ...(props.style || {}),
+        }}
+      />
+    </>
+  );
 }
 
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {}
@@ -880,23 +901,33 @@ function SeasonPicker({ value, onChange }: SeasonPickerProps) {
       }}
     >
       {SEASONS.map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={() => toggle(s)}
-          style={{
-            padding: "7px 12px",
-            fontSize: 12.5,
-            borderRadius: 6,
-            cursor: "pointer",
-            border: `1px solid ${value.includes(s) ? COLOR.text : COLOR.border}`,
-            background: value.includes(s) ? COLOR.text : COLOR.bg,
-            color: value.includes(s) ? "#fff" : COLOR.text,
-            transition: "all .15s",
-          }}
-        >
-          {s}
-        </button>
+<button
+  key={s}
+  type="button"
+  onClick={() => toggle(s)}
+onMouseEnter={(e) => {
+  if (!value.includes(s)) {
+    e.currentTarget.style.color = COLOR.text;
+  }
+}}
+onMouseLeave={(e) => {
+  if (!value.includes(s)) {
+    e.currentTarget.style.color = COLOR.subtext;
+  }
+}}
+style={{
+  padding: "7px 12px",
+  fontSize: 12.5,
+  borderRadius: 6,
+  cursor: "pointer",
+  background: value.includes(s) ? "#ECECEC" : COLOR.bg,
+  border: `1px solid ${value.includes(s) ? "#D9D9D9" : COLOR.border}`,
+  color: value.includes(s) ? COLOR.text : COLOR.subtext,
+  transition: "all .10s",
+}}
+>
+  {s}
+</button>
       ))}
     </div>
   );
@@ -2638,7 +2669,31 @@ const handleClose = useCallback(() => {
   }, [handleClose]);
 
   if (!item) return null;
-  
+
+function formatPurchaseDate(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length !== 8) return value;
+  const yyyy = digits.slice(0, 4);
+  const mm = digits.slice(4, 6);
+  const dd = digits.slice(6, 8);
+  const y = Number(yyyy);
+  const m = Number(mm);
+  const d = Number(dd);
+  const date = new Date(y, m - 1, d);
+  const valid =
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d;
+  if (!valid) return value;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatPrice(value: string) {
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString("en-US");
+}
+
   const set = (k: keyof ClothingDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setDraft((d) => ({ ...d, [k]: e.target.value }));
   const setBool = (k: keyof ClothingDraft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [k]: e.target.checked }));
   const setField = (k: keyof ClothingDraft, v: any) => setDraft((d) => ({ ...d, [k]: v }));
@@ -2684,21 +2739,12 @@ return (
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "flex-end",
             alignItems: "center",
             padding: "12px 28px",
             borderBottom: `1px solid ${COLOR.border}`,
           }}
         >
-          <span
-            style={{
-              fontSize: 11,
-              color: COLOR.subtext,
-              letterSpacing: 1,
-            }}
-          >
-            DETAIL
-          </span>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {status === "saving" && (
@@ -2926,14 +2972,180 @@ return (
   </Field>
 </div>
 
-        <SectionTitle>Purchase Info</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Retail Price"><TextInput type="number" value={draft.price} onChange={set("price")} /></Field>
-          <Field label="Purchase Price"><TextInput type="number" value={draft.purchasePrice} onChange={set("purchasePrice")} /></Field>
-          <Field label="Place of Purchase"><TextInput value={draft.purchasePlace} onChange={set("purchasePlace")} /></Field>
-          <Field label="Purchase Date"><TextInput type="date" value={draft.purchaseDate} onChange={set("purchaseDate")} /></Field>
-        </div>
+<SectionTitle>Purchase Info</SectionTitle>
+<div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+  }}
+>
 
+  <Field
+    horizontal
+    label="retail price"
+  >
+<div
+  style={{
+    position: "relative",
+    width: "100%",
+  }}
+>
+  <TextInput
+    type="number"
+    value={draft.price}
+    onChange={set("price")}
+    style={{ paddingRight: 32 }}
+  />
+  <span
+    style={{
+      position: "absolute",
+      right: 20,
+      top: "50%",
+      transform: "translateY(-50%)",
+      color: COLOR.subtext,
+      fontSize: 13,
+      pointerEvents: "none",
+      userSelect: "none",
+    }}
+  >
+    ₩
+  </span>
+</div>
+  </Field>
+  <Field
+    horizontal
+    label="price paid"
+  >
+<div
+  style={{
+    position: "relative",
+    width: "100%",
+  }}
+>
+  <TextInput
+    type="number"
+    value={draft.purchasePrice}
+    onChange={set("purchasePrice")}
+    style={{ paddingRight: 32 }}
+  />
+  <span
+    style={{
+      position: "absolute",
+      right: 20,
+      top: "50%",
+      transform: "translateY(-50%)",
+      color: COLOR.subtext,
+      fontSize: 13,
+      pointerEvents: "none",
+      userSelect: "none",
+    }}
+  >
+    ₩
+  </span>
+</div>
+  </Field>
+  <Field
+    horizontal
+    label="date"
+  >
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  }}
+>
+  <TextInput
+    type="text"
+    inputMode="numeric"
+    maxLength={8}
+    placeholder="YYYYMMDD"
+    value={draft.purchaseDate}
+    onChange={set("purchaseDate")}
+    onFocus={(e) => {
+      setField(
+        "purchaseDate",
+        e.target.value.replace(/-/g, "")
+      );
+    }}
+    onBlur={(e) => {
+      setField(
+        "purchaseDate",
+        formatPurchaseDate(e.target.value)
+      );
+    }}
+    onKeyDown={(e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const value = formatPurchaseDate(
+          (e.target as HTMLInputElement).value
+        );
+        setField("purchaseDate", value);
+        (e.target as HTMLInputElement).blur();
+      }
+    }}
+    style={{ flex: 1 }}
+  />
+
+<button
+  type="button"
+  onClick={() => {
+    const today = new Date();
+
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+
+    setField("purchaseDate", `${yyyy}-${mm}-${dd}`);
+  }}
+onMouseEnter={(e) => {
+  e.currentTarget.style.color = COLOR.text;
+  e.currentTarget.style.background = "#ECECEC";
+  e.currentTarget.style.borderColor = "#D9D9D9";
+}}
+onMouseLeave={(e) => {
+  e.currentTarget.style.color = COLOR.subtext;
+  e.currentTarget.style.background = COLOR.bg;
+  e.currentTarget.style.borderColor = COLOR.border;
+  e.currentTarget.style.transform = "translateY(0)";
+}}
+onMouseDown={(e) => {
+  e.currentTarget.style.background = "#E2E2E2";
+  e.currentTarget.style.transform = "translateY(1px)";
+}}
+onMouseUp={(e) => {
+  e.currentTarget.style.background = "#ECECEC";
+  e.currentTarget.style.transform = "translateY(0)";
+}}
+  style={{
+    height: 36,
+    minWidth: 76,
+    padding: "0 20px",
+    borderRadius: 6,
+    border: `1px solid ${COLOR.border}`,
+    background: COLOR.bg,
+    color: COLOR.subtext,
+    cursor: "pointer",
+    fontSize: 12.5,
+    whiteSpace: "nowrap",
+    transition: "all .10s",
+    userSelect: "none",
+  }}
+>
+  today
+</button>
+</div>
+  </Field>
+  <Field
+    horizontal
+    label="place"
+  >
+    <TextInput
+      value={draft.purchasePlace}
+      onChange={set("purchasePlace")}
+    />
+  </Field>
+</div>
         <SectionTitle>Size</SectionTitle>
         <Field label="Size Label">
   <div
