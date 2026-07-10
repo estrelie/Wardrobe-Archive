@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import {
   Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, Rows3, Plus, X,
   Heart, Trash2, BarChart3, Shirt, Tag, Command, Image as ImageIcon,
-  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Square, Calendar as CalendarIcon, Database
+  ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ChevronDown, Square, Calendar as CalendarIcon, Database, Check,
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -67,7 +67,6 @@ export type DeclutterMethod = "중고 거래" | "처분";
 export type BrandTier = "헤리티지" | "디자이너" | "컨템포러리" | "SPA" | "영캐주얼" | "보세" | "스포츠" | "아웃도어";
 export type PageType = "wardrobe" | "brands" | "stats" | "calendar" | "trash";
 export type ViewMode = "gallery" | "table";
-export type DeletionReason = "판매" | "기부" | "폐기" | "기타";
 
 // --- src/types/material.ts ---
 export interface Material {
@@ -137,12 +136,12 @@ export interface ClothingItem {
   bagDepthCm: number | string;
   favorite: boolean;
   memo: string;
+  materialNote: string;
   repairNeeded: boolean;
   declutter: boolean;
   declutterMethod: DeclutterMethod | string;
   deleted?: boolean;
   deletedAt?: string | null;
-  deletionReason?: DeletionReason | string | null;
   soldPrice?: number | "" | null;
   soldDate?: string | null;
   brandInfo?: Brand;
@@ -262,7 +261,23 @@ const CATEGORY_GROUP_LABELS: Record<CategoryGroup, string> = {
   Others: "Others",
 };
 const SEASONS: Season[] = ["여름", "봄/가을", "겨울"];
-const SIZE_OPTIONS = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "FREE",];
+const SIZE_OPTIONS_BY_TYPE: Record<string, string[]> = {
+  top: ["XS", "S", "M", "L", "FREE"],
+  bottom: [
+    "26",
+    "27",
+    "28",
+    "FREE",
+  ],
+  shoes: [
+    "240",
+    "245",
+    "250",
+    "FREE",
+  ],
+  bag: ["FREE"],
+  none: [],
+};
 const DECLUTTER_METHODS: DeclutterMethod[] = ["중고 거래", "처분"];
 const BRAND_TIERS: BrandTier[] = ["헤리티지", "디자이너", "컨템포러리", "SPA", "영캐주얼", "보세", "스포츠", "아웃도어"];
 
@@ -350,7 +365,7 @@ const CATEGORY_SIZE_TYPE: Record<string, string> = {
   "Padding": "outer",
 
   // Others
-  "Shoes": "none",
+  "Shoes": "shoes",
   "Bag": "bag",
   "Accessories": "none",
 };
@@ -359,6 +374,15 @@ function getSizeFields(category: string): SizeField[] | null {
   const type = CATEGORY_SIZE_TYPE[category] ?? "top";
   if (type === "none") return null;
   return SIZE_FIELD_SETS[type] || null;
+}
+
+function getSizeOptions(category: string): string[] {
+  const type = CATEGORY_SIZE_TYPE[category] ?? "top";
+  if (type === "bottom") return SIZE_OPTIONS_BY_TYPE.bottom;
+  if (category === "Shoes") return SIZE_OPTIONS_BY_TYPE.shoes;
+  if (category === "Bag") return SIZE_OPTIONS_BY_TYPE.bag;
+  if (type === "none") return SIZE_OPTIONS_BY_TYPE.none;
+  return SIZE_OPTIONS_BY_TYPE.top;
 }
 
 /* ---------------------------------------------------------
@@ -484,12 +508,12 @@ const seedItem = (over: Partial<ClothingItem> & { seed?: string }): ClothingItem
   bagDepthCm: "",
   favorite: false,
   memo: "",
+  materialNote: "",
   repairNeeded: false,
   declutter: false,
   declutterMethod: DECLUTTER_METHODS[0],
   deleted: false,
   deletedAt: null,
-  deletionReason: null,
   soldPrice: null,
   soldDate: null,
   ...over,
@@ -732,6 +756,7 @@ function Field({
   );
 }
 
+
 const inputStyle: React.CSSProperties = {
   width: "100%", boxSizing: "border-box", padding: "9px 10px",
   fontSize: 14, color: COLOR.text, background: COLOR.bg,
@@ -762,6 +787,56 @@ function TextInput(props: TextInputProps) {
         }}
       />
     </>
+  );
+}
+
+function AutoResizeTextarea({
+  value,
+  onChange,
+  placeholder,
+  minRows = 4,
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
+  minRows?: number;
+}) {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+  const resize = React.useCallback(() => {
+    if (!ref.current) return;
+    ref.current.style.height = "0px";
+    ref.current.style.height = `${ref.current.scrollHeight}px`;
+  }, []);
+  React.useLayoutEffect(() => {
+    resize();
+  }, [value, resize]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      placeholder={placeholder}
+      rows={minRows}
+      onChange={(e) => {
+        onChange(e);
+        resize();
+      }}
+      style={{
+        width: "100%",
+        resize: "none",
+        overflow: "hidden",
+        border: `1px solid ${COLOR.border}`,
+        borderRadius: 8,
+        padding: "12px 14px",
+        fontSize: 14,
+        lineHeight: 1.5,
+        fontFamily: "inherit",
+        color: COLOR.text,
+        background: COLOR.bg,
+        outline: "none",
+        boxSizing: "border-box",
+      }}
+    />
   );
 }
 
@@ -933,6 +1008,239 @@ style={{
   );
 }
 
+interface CategoryPickerProps {
+  value: Category | string;
+  onChange: (category: Category) => void;
+}
+
+function CategoryPicker({
+  value,
+  onChange,
+}: CategoryPickerProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const currentGroup =
+    (Object.entries(CATEGORY_GROUPS).find(([, items]) =>
+      items.includes(value as Category)
+    )?.[0] as CategoryGroup) ?? "Tops";
+
+  const [group, setGroup] = useState<CategoryGroup>(currentGroup);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const next =
+      (Object.entries(CATEGORY_GROUPS).find(([, items]) =>
+        items.includes(value as Category)
+      )?.[0] as CategoryGroup) ?? "Tops";
+    setGroup(next);
+  }, [value]);
+
+  useEffect(() => {
+    function handleMouseDown(e: MouseEvent) {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+return (
+  <div
+    ref={wrapperRef}
+    style={{
+      position: "relative",
+      width: "100%",
+    }}
+  >
+    {/* Selected */}
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      style={{
+        width: "100%",
+        height: 38,
+        padding: "0 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        border: `1px solid ${COLOR.border}`,
+        borderRadius: 8,
+        background: COLOR.bg,
+        cursor: "pointer",
+        transition: "all .15s",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 13,
+          color: COLOR.text,
+          fontWeight: 400,
+        }}
+      >
+        {value}
+      </span>
+
+      <ChevronDown
+        size={16}
+        color={COLOR.subtext}
+        style={{
+          transition: "transform .18s",
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+        }}
+      />
+    </button>
+
+    {open && (
+      <div
+        style={{
+          position: "absolute",
+          transition: "box-shadow .18s ease, border-color .18s ease",
+          top: 42,
+          left: 0,
+          right: 0,
+          zIndex: 100,
+
+          background: COLOR.bg,
+          border: "1px solid #ECECEC",
+          borderRadius: 10,
+          overflow: "hidden",
+          boxShadow:
+            "0 6px 18px rgba(0,0,0,.05)",
+        }}
+      >
+        {/* Group */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 24,
+            padding: "10px 14px 7px",
+            borderBottom: "1px solid #F3F3F3",
+          }}
+        >
+          {(Object.keys(
+            CATEGORY_GROUPS
+          ) as CategoryGroup[]).map((g) => {
+            const active = group === g;
+
+            return (
+<button
+  key={g}
+  type="button"
+  onClick={() => setGroup(g)}
+  onMouseEnter={(e) => {
+    if (!active) {
+      e.currentTarget.style.color = COLOR.text;
+    }
+  }}
+  onMouseLeave={(e) => {
+    if (!active) {
+      e.currentTarget.style.color = COLOR.subtext;
+    }
+  }}
+  style={{
+    background: "transparent",
+    border: "none",
+    padding: "2px 0",
+    fontSize: 12.5,
+    fontWeight: active ? 500 : 400,
+    color: active ? COLOR.text : COLOR.subtext,
+    cursor: "pointer",
+    transition: "color .12s",
+    borderBottom: active
+      ? `1.5px solid ${COLOR.text}`
+      : "1.5px solid transparent",
+  }}
+>
+  {CATEGORY_GROUP_LABELS[g]}
+</button>
+            );
+          })}
+        </div>
+
+        {/* Category */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            padding: "8px 12px 10px",
+            transition: "all .18s ease",
+          }}
+        >
+          {CATEGORY_GROUPS[group].map((category) => {
+            const active = value === category;
+
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => {
+                  onChange(category);
+                  setOpen(false);
+                }}
+onMouseEnter={(e) => {
+  if (!active) {
+    e.currentTarget.style.color = COLOR.text;
+    e.currentTarget.style.background = "#F7F7F7";
+    e.currentTarget.style.borderColor = "#E5E5E5";
+  }
+}}
+onMouseLeave={(e) => {
+  if (!active) {
+    e.currentTarget.style.color = COLOR.subtext;
+    e.currentTarget.style.background = COLOR.bg;
+    e.currentTarget.style.borderColor = COLOR.border;
+  }
+}}
+style={{
+  minWidth: 94,
+  height: 32,
+  padding: "0 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 6,
+  cursor: "pointer",
+  border: `1px solid ${
+    active ? "#D9D9D9" : COLOR.border
+  }`,
+  background: active
+    ? "#ECECEC"
+    : COLOR.bg,
+  color: active
+    ? COLOR.text
+    : COLOR.subtext,
+  fontSize: 12,
+  fontWeight: 400,
+  whiteSpace: "nowrap",
+  transition: "background .12s, border-color .12s, color .12s",
+}}
+              >
+                {category}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    )}
+  </div>
+);
+}
+
 interface BrandInputProps {
   value: string;
   onChange: (val: string) => void;
@@ -975,8 +1283,8 @@ function BrandInput({
       {focused && suggestions.length > 0 && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 30,
-          background: COLOR.bg, border: `1px solid ${COLOR.border}`, borderRadius: 6,
-          boxShadow: "0 8px 20px rgba(0,0,0,0.08)", maxHeight: 180, overflowY: "auto",
+          background: COLOR.bg, border: "1px solid #ECECEC", borderRadius: 10,
+          boxShadow: "0 4px 16px rgba(0,0,0,.05)", maxHeight: 180, overflowY: "auto",
         }}>
           {suggestions.map((b) => (
             <div key={b} onMouseDown={() => onChange(b)} style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer" }}
@@ -1044,16 +1352,22 @@ function BrandLogoPicker({ value, onChange }: BrandLogoPickerProps) {
 >
       <div
         onClick={() => inputRef.current?.click()}
-        style={{
-          width: 38, height: 38, borderRadius: 6, border: `1px dashed ${COLOR.border}`,
-          background: COLOR.bg2, cursor: "pointer", display: "flex", alignItems: "center",
-          justifyContent: "center", overflow: "hidden",
-        }}
+style={{
+  width: "100%",
+  height: "100%",
+  borderRadius: 6,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+  background: "transparent",
+}}
       >
         {busy
           ? <span style={{ fontSize: 8.5, color: COLOR.subtext }}>...</span>
           : value
-            ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", }} />
             : <ImageIcon size={14} color={COLOR.subtext} />}
       </div>
       {value && !busy && hovered && (
@@ -1078,64 +1392,84 @@ interface FormBrandSectionProps {
   newLogo: string;
   setNewLogo: (val: string) => void;
 }
-function FormBrandSection({ formBrandName, brands, newTier, setNewTier, newLogo, setNewLogo }
-  : FormBrandSectionProps) {
-  const matchedBrand = brands.find(b => b.name === formBrandName);
 
-  if (!formBrandName) return null;
+function FormBrandSection({
+  formBrandName,
+  brands,
+  newTier,
+  setNewTier,
+  newLogo,
+  setNewLogo,
+}: FormBrandSectionProps) {
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const matchedBrand = brands.find(
+    (b) => b.name === formBrandName
+  );
+  if (!formBrandName) {
+    return null;
+  }
   if (matchedBrand) {
     return null;
   }
 
 return (
   <div
+    ref={wrapperRef}
     style={{
-      padding: "10px 10px 14px",
-      background: COLOR.bg2,
-      borderRadius: 8,
-      border: `1px dashed ${COLOR.border}`,
+      marginTop: 8,
+      padding: 10,
+      background: COLOR.bg,
+      border: `1px solid ${COLOR.border}`,
+      borderRadius: 10,
+      transition: "box-shadow .18s ease, border-color .18s ease",
+      boxShadow: "0 4px 16px rgba(0,0,0,.05)",
     }}
   >
-      <div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "52px 1fr",
-    gap: 10,
-    alignItems: "stretch",
-  }}
->
-<div
-  style={{
-    height: 38,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  }}
->
-  <BrandLogoPicker
-    value={newLogo}
-    onChange={setNewLogo}
-  />
-</div>
-<div style={{ flex: 1 }}>
-  <Select
-    value={newTier}
-    onChange={e => setNewTier(e.target.value)}
+    <div
       style={{
-    height: 38,
-    paddingTop: 0,
-    paddingBottom: 0,
-  }}
-  >
-    {BRAND_TIERS.map((t) => (
-      <option key={t}>{t}</option>
-    ))}
-  </Select>
-</div>
+        display: "grid",
+        gridTemplateColumns: "44px 1fr",
+        gap: 10,
+        alignItems: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 44,
+          height: 40,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: `1px solid ${COLOR.border}`,
+          borderRadius: 6,
+          background: COLOR.bg,
+          overflow: "hidden",
+        }}
+      >
+        <BrandLogoPicker
+          value={newLogo}
+          onChange={setNewLogo}
+        />
       </div>
+
+      <Select
+        value={newTier}
+        onChange={(e) => setNewTier(e.target.value)}
+        style={{
+          height: 40,
+          paddingTop: 0,
+          paddingBottom: 0,
+          borderRadius: 6,
+        }}
+      >
+        {BRAND_TIERS.map((tier) => (
+          <option key={tier}>{tier}</option>
+        ))}
+      </Select>
     </div>
-  );
+  </div>
+);
 }
 
 interface MaterialsEditorProps {
@@ -1242,33 +1576,6 @@ function MaterialsEditor({ materials, onChange, materialLibrary, onAddMaterialTo
   );
 }
 
-interface SizeDetailBoxProps {
-  category: string;
-  draft: ClothingDraft;
-  onChangeField: (k: keyof ClothingDraft, v: string) => void;
-}
-function SizeDetailBox({ category, draft, onChangeField }: SizeDetailBoxProps) {
-  const rows = getSizeFields(category);
-  if (!rows) return null;
-  return (
-    <div style={{ border: `1px solid ${COLOR.border}`, borderRadius: 8, padding: 14 }}>
-      <div style={{ fontSize: 12, color: COLOR.subtext, marginBottom: 10 }}>Detailed Size</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {rows.map((r) => (
-          <div key={r.key}>
-            <div style={{ fontSize: 11.5, color: COLOR.subtext, marginBottom: 5 }}>{r.label}</div>
-            <div style={{ position: "relative" }}>
-              <TextInput type="number" value={draft[r.key] as string | number}
-                onChange={(e) => onChangeField(r.key, e.target.value)}
-                style={{ paddingRight: 32 }} />
-              <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: COLOR.subtext }}>cm</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ---------------------------------------------------------
    Image Manager (Product Photos)
@@ -1406,15 +1713,16 @@ onChange([
   return (
     <div 
       className="fade-tab" 
-      style={{
-        position: "relative",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: 0,
-      }}
+style={{
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "stretch",
+  justifyContent: "flex-start",
+  height: 640,
+  flex: "0 0 auto",
+  overflow: "hidden",
+}}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -1443,16 +1751,16 @@ onChange([
   onMouseEnter={() => setImageHover(true)}
   onMouseLeave={() => setImageHover(false)}
 
-  style={{
-    position: "relative",
-    width: "100%",
-    background: COLOR.bg2,
-    borderRadius: 6,
-    overflow: "hidden",
-    flex: 1,
-    minHeight: 0,
-    marginBottom: 0,
-  }}
+style={{
+  position: "relative",
+  width: "100%",
+  height: 415,
+  background: COLOR.bg2,
+  borderRadius: 6,
+  overflow: "hidden",
+  flexShrink: 0,
+  marginBottom: 0,
+}}
 >
   {images[previewIndex] ? (
     <img
@@ -1462,6 +1770,10 @@ onChange([
         width: "100%",
         height: "100%",
         objectFit: "cover",
+        display: "block",
+        willChange: "transform",
+        transform: "translateZ(0)",
+        backfaceVisibility: "hidden",
       }}
     />
   ) : (
@@ -2185,7 +2497,13 @@ const handleDragEnd = useCallback(async (event: DragEndEvent) => {
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleContainerDrop}
-      style={{ minHeight: 200, position: "relative" }}
+      style={{
+  position: "relative",
+  height: 640,
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
+}}
     >
       <DndContext
         sensors={sensors}
@@ -2195,11 +2513,14 @@ const handleDragEnd = useCallback(async (event: DragEndEvent) => {
         onDragCancel={handleDragCancel}
       >
 <div
-  style={{
-    position: "relative",
-    columnCount: 2,
-    columnGap: 16,
-  }}
+style={{
+  position: "relative",
+  flex: 1,
+  overflowY: "auto",
+  columnCount: 2,
+  columnGap: 16,
+  paddingRight: 2,
+}}
 >
      {dragActive && references.length < MAX_REFERENCE_COUNT && (
         <div style={{
@@ -2563,7 +2884,7 @@ interface DrawerProps {
   item: ClothingItem;
   onClose: () => void;
   onSave: (item: ClothingItem) => void;
-  onDelete: (id: string, reason?: string, price?: number | "", date?: string) => void;
+  onDelete: (id: string) => void;
   brands: Brand[];
   onAddBrand: (b: Brand) => void;
   materialLibrary: MaterialLibraryItem[];
@@ -2576,17 +2897,11 @@ function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialL
   const [showBrandSection, setShowBrandSection] = useState(false);
   const brandInputRef = useRef<HTMLDivElement>(null);
   const brandPanelRef = useRef<HTMLDivElement>(null);
+  const rightScrollRef = useRef<HTMLDivElement>(null);
 
-  const [delReason, setDelReason] = useState<DeletionReason | string>("판매");
-  const [soldPrice, setSoldPrice] = useState<number | "">("");
-  const [soldDate, setSoldDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-
-  useEffect(() => {
-    setShowDeleteConfirm(false);
-    setDelReason("판매");
-    setSoldPrice("");
-    setSoldDate(new Date().toISOString().split('T')[0]);
-  }, [item.id]);
+useEffect(() => {
+  setShowDeleteConfirm(false);
+}, [item.id]);
 
   useEffect(() => {
 const handleMouseDown = (e: MouseEvent) => {
@@ -2668,6 +2983,14 @@ const handleClose = useCallback(() => {
     return () => window.removeEventListener("keydown", onKey);
   }, [handleClose]);
 
+useEffect(() => {
+  const original = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  return () => {
+    document.body.style.overflow = original;
+  };
+}, []);
+
   if (!item) return null;
 
 function formatPurchaseDate(value: string) {
@@ -2700,15 +3023,22 @@ function formatPrice(value: string) {
 
 return (
   <>
-    <div
-      onClick={handleClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(17,17,17,0.28)",
-        zIndex: 40,
-      }}
-    />
+<div
+  onClick={handleClose}
+  onWheel={(e) => {
+    e.preventDefault();
+
+    if (rightScrollRef.current) {
+      rightScrollRef.current.scrollTop += e.deltaY;
+    }
+  }}
+  style={{
+    position: "fixed",
+    inset: 0,
+    background: "rgba(17,17,17,0.28)",
+    zIndex: 40,
+  }}
+/>
 
     <div
       style={{
@@ -2721,20 +3051,21 @@ return (
         padding: 24,
       }}
     >
-      <div
-        style={{
-          width: 970,
-          maxWidth: "95vw",
-          height: "90vh",
-          background: COLOR.bg,
-          border: `1px solid ${COLOR.border}`,
-          borderRadius: 12,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.16)",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+<div
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    width: 970,
+    maxWidth: "95vw",
+    height: "90vh",
+    background: COLOR.bg,
+    border: `1px solid ${COLOR.border}`,
+    borderRadius: 12,
+    boxShadow: "0 24px 64px rgba(0,0,0,0.16)",
+    overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  }}
+>
         {/* Header */}
         <div
           style={{
@@ -2780,6 +3111,7 @@ return (
             display: "grid",
             gridTemplateColumns: "420px 1fr",
             minHeight: 0,
+            overflow: "hidden",
           }}
         >
           {/* Left */}
@@ -2819,12 +3151,14 @@ return (
           </div>
 
           {/* Right */}
-          <div
-            style={{
-              overflowY: "auto",
-              padding: "24px 32px 40px",
-            }}
-          >
+<div
+  ref={rightScrollRef}
+  style={{
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    padding: "24px 32px 40px",
+  }}
+>
             <div
               style={{
                 display: "flex",
@@ -2833,38 +3167,60 @@ return (
                 marginBottom: 18,
               }}
             >
-              <div>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 7,
-                  }}
-                >
-                  <BrandLogo
-                    src={draft.brandInfo?.logo}
-                    size={19}
-                  />
-                  <div
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 500,
-                      color: COLOR.text,
-                    }}
-                  >
-                    {draft.brandName || ""}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    color: COLOR.subtext,
-                    marginTop: 2,
-                  }}
-                >
-                  {draft.name || ""}
-                </div>
-              </div>
+ <div
+    style={{
+      flex: 1,
+    }}
+  >
+
+  </div>
+<div
+  style={{
+    height: 52,
+    width: "100%",
+    display: "grid",
+    gridTemplateRows: "28px 20px",
+    justifyItems: "start",
+    alignContent: "start",
+  }}
+>
+  <div
+    style={{
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      justifyContent: "flex-start",
+    }}
+  >
+    <BrandLogo
+      src={draft.brandInfo?.logo}
+      size={19}
+    />
+    <div
+      style={{
+        fontSize: 20,
+        fontWeight: 500,
+        color: COLOR.text,
+        lineHeight: "28px",
+        textAlign: "left",
+      }}
+    >
+      {draft.brandName || ""}
+    </div>
+  </div>
+  <div
+    style={{
+      width: "100%",
+      fontSize: 14,
+      color: COLOR.subtext,
+      lineHeight: "20px",
+      textAlign: "left",
+    }}
+  >
+    {draft.name || ""}
+  </div>
+</div>
               <button
                 onClick={() =>
                   setDraft((d) => ({
@@ -2946,20 +3302,21 @@ return (
     />
   </Field>
 
-  <Field
-    horizontal
-    label="category"
-  >
-    <Select
-      value={draft.category}
-      onChange={set("category")}
-      onFocus={() => setShowBrandSection(false)}
-    >
-      {CATEGORIES.map((c) => (
-        <option key={c}>{c}</option>
-      ))}
-    </Select>
-  </Field>
+<Field
+  horizontal
+  label="category"
+  style={{
+    alignItems: "flex-start",
+  }}
+>
+  <CategoryPicker
+    value={draft.category}
+    onChange={(category) => {
+      setShowBrandSection(false);
+      setField("category", category);
+    }}
+  />
+</Field>
 
   <Field
     horizontal
@@ -3146,131 +3503,334 @@ onMouseUp={(e) => {
     />
   </Field>
 </div>
-        <SectionTitle>Size</SectionTitle>
-        <Field label="Size Label">
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "center",
-      gap: 8,
-      flexWrap: "wrap", marginTop: 14, marginBottom: 16,
-    }}
-  >
-    {SIZE_OPTIONS.map((option) => {
-      const active = draft.size === option;
 
-      return (
-        <button
-          key={option}
-          type="button"
-          onClick={() => setField("size", option)}
-          style={{
-            minWidth: option === "FREE" ? 54 : 38,
-            height: 34,
-            padding: "0 10px",
-            borderRadius: 17,
-            border: `1px solid ${active ? COLOR.text : COLOR.border}`,
-            background: active ? COLOR.text : COLOR.bg,
-            color: active ? "#fff" : COLOR.text,
-            cursor: "pointer",
-            fontSize: 12,
-            fontWeight: 500,
-            transition: "all .15s",
-          }}
-        >
-          {option}
-        </button>
-      );
-    })}
+{CATEGORY_SIZE_TYPE[draft.category] !== "none" && (
+  <>
+
+<SectionTitle>Size Info</SectionTitle>
+<Field
+  horizontal
+  label="Size Label"
+  style={{ marginTop: -4, marginBottom: 10 }}
+>
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    width: "100%",
+    minHeight: 40,
+  }}
+>
+{getSizeOptions(draft.category).map((option) => {
+  const active = draft.size === option;
+
+  return (
+    <button
+      key={option}
+      type="button"
+      onClick={() => setField("size", option)}
+      onMouseEnter={(e) => {
+        if (!active) {
+          e.currentTarget.style.color = COLOR.text;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.color = COLOR.subtext;
+        }
+      }}
+      style={{
+        minWidth: option === "FREE" ? 56 : 38,
+        padding: "9.5px 13px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        lineHeight: 1,
+        borderRadius: 6,
+        cursor: "pointer",
+        background: active ? "#ECECEC" : COLOR.bg,
+        border: `1px solid ${active ? "#D9D9D9" : COLOR.border}`,
+        color: active ? COLOR.text : COLOR.subtext,
+        transition: "all .10s",
+      }}
+    >
+      {option}
+    </button>
+  );
+})}
   </div>
 </Field>
-        <Field label="Materials">
-          <MaterialsEditor 
-             materials={draft.materials} 
-             onChange={(m) => setField("materials", m)} 
-             materialLibrary={materialLibrary}
-             onAddMaterialToLibrary={onAddMaterialToLibrary}
-             materialFreq={materialFreq}
+
+{getSizeFields(draft.category) && (
+  <Field
+    horizontal
+    label="Detailed Size"
+    style={{
+      alignItems: "flex-start",
+    }}
+  >
+    <div
+      style={{
+        width: "100%",
+        border: `1px solid ${COLOR.border}`,
+        borderRadius: 10,
+        overflow: "hidden",
+        background: COLOR.bg,
+      }}
+    >
+      {getSizeFields(draft.category)!.map((row, index) => (
+        <div
+          key={row.key}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "110px 1fr 89px",
+            alignItems: "center",
+            minHeight: 44,
+            borderTop:
+              index === 0
+                ? "none"
+                : "1px solid #F6F6F6",
+          }}
+        >
+          <div
+            style={{
+              paddingLeft: 20,
+              fontSize: 12.5,
+              fontWeight: 400,
+              color: COLOR.subtext,
+              justifySelf: "start",
+              width: "100%",
+              textAlign: "left",
+            }}
+          >
+            {row.label}
+          </div>
+          <input
+            type="number"
+            value={draft[row.key] as string | number}
+            onChange={(e) => setField(row.key, e.target.value)}
+            style={{
+              width: "100%",
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              fontSize: 14,
+              fontWeight: 300,
+              color: COLOR.text,
+              padding: 0,
+              margin: 0,
+              textAlign: "right",
+              paddingRight: 18,
+            }}
           />
-        </Field>
-        {getSizeFields(draft.category) && (
-          <div style={{ marginBottom: 4 }}>
-            <SizeDetailBox category={draft.category} draft={draft} onChangeField={setField} />
+          <div
+            style={{
+              fontSize: 12.5,
+              color: COLOR.subtext,
+              textAlign: "center",
+            }}
+          >
+            cm
           </div>
-        )}
+        </div>
+      ))}
+    </div>
+  </Field>
+)}
 
-        <SectionTitle>Memo</SectionTitle>
-        <textarea value={draft.memo} onChange={set("memo")} rows={3}
-          style={{ ...inputStyle, resize: "vertical", marginBottom: 18, fontFamily: "inherit" }} />
+</>
+)}
 
-        <SectionTitle>Status Management</SectionTitle>
-        <button type="button" onClick={() => setField("declutter", !draft.declutter)} style={{ ...chipBtnStyle(draft.declutter), marginBottom: draft.declutter ? 12 : 0 }}>
-          To be decluttered
-        </button>
-        {draft.declutter && (
-          <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 18 }}>
-            {DECLUTTER_METHODS.map((m) => (
-              <button key={m} type="button" onClick={() => setField("declutterMethod", m)} style={{...chipBtnStyle(draft.declutterMethod === m), minWidth: 92, }}>
-                {m}
-              </button>
-            ))}
-          </div>
-        )}
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, margin: "16px 0 24px", cursor: "pointer" }}>
-          <input type="checkbox" checked={draft.repairNeeded} onChange={setBool("repairNeeded")} style={{width: 15, height: 15, margin: 0, accentColor: "#2F2F2F", cursor: "pointer", }} />
-          Repair Needed
-        </label>
+<div style={{ height: 1 }} />
 
-        {!showDeleteConfirm ? (
-          <button onClick={() => setShowDeleteConfirm(true)} style={{
-            width: "100%", padding: "11px 0", background: COLOR.bg, color: COLOR.subtext,
-            border: `1px solid ${COLOR.border}`, borderRadius: 6, fontSize: 14, cursor: "pointer",
-          }}>Delete</button>
-        ) : (
-          <div style={{ padding: 16, background: COLOR.bg2, borderRadius: 8, border: `1px solid ${COLOR.border}` }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: COLOR.text, marginBottom: 4 }}>Move to Recycle Bin?</div>
-            <div style={{ fontSize: 12, color: COLOR.subtext, marginBottom: 14 }}>You can restore this item later.</div>
+<SectionTitle>Additional Info</SectionTitle>
+<Field
+  horizontal
+  label="Materials"
+  style={{
+    alignItems: "flex-start",
+    marginBottom: 11,
+  }}
+>
+  <AutoResizeTextarea
+    value={draft.materialNote ?? ""}
+    onChange={(e) => setField("materialNote", e.target.value)}
+    minRows={3}
+  />
+</Field>
 
-            <div style={{ marginBottom: 12 }}>
-              <Field label="Deletion Reason">
-                <Select value={delReason} onChange={(e) => setDelReason(e.target.value)}>
-                  <option value="판매">판매</option>
-                  <option value="기부">기부</option>
-                  <option value="폐기">폐기</option>
-                  <option value="기타">기타</option>
-                </Select>
-              </Field>
+<Field
+  horizontal
+  label="Memo"
+  style={{
+    alignItems: "flex-start",
+  }}
+>
+  <AutoResizeTextarea
+    value={draft.memo}
+    onChange={set("memo")}
+    minRows={3}
+  />
+</Field>
 
-              {delReason === "판매" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <Field label="Selling Price" style={{ marginBottom: 0 }}>
-                    <TextInput type="number" value={soldPrice} onChange={(e) => setSoldPrice(e.target.value === "" ? "" : Number(e.target.value))} />
-                  </Field>
-                  <Field label="Date of Sale" style={{ marginBottom: 0 }}>
-                    <TextInput type="date" value={soldDate} onChange={(e) => setSoldDate(e.target.value)} />
-                  </Field>
-                </div>
-              )}
-            </div>
+<Field
+  horizontal
+  label="Repair Needed"
+  style={{
+    alignItems: "center",
+    marginTop: -4,
+    marginBottom: 20,
+  }}
+>
+<div
+  style={{
+    display: "flex",
+    justifyContent: "flex-start",
+    alignItems: "flex-start",
+    width: "100%",
+    paddingTop: 2,
+  }}
+>
+<button
+  type="button"
+  onClick={() => setField("repairNeeded", !draft.repairNeeded)}
+  style={{
+    width: 18,
+    height: 18,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 4,
+    border: `1px solid ${
+      draft.repairNeeded ? "#D9D9D9" : COLOR.border
+    }`,
+    background: draft.repairNeeded
+      ? "#ECECEC"
+      : COLOR.bg,
+    cursor: "pointer",
+    transition: "all .12s",
+    padding: 0,
+  }}
+>
+  {draft.repairNeeded && (
+    <Check
+      size={12}
+      strokeWidth={2.5}
+      color={COLOR.text}
+    />
+  )}
+</button>
+  </div>
+</Field>
 
-            <div style={{ display: "flex", gap: 8, marginTop: delReason === "판매" ? 0 : 14 }}>
-              <button onClick={() => setShowDeleteConfirm(false)} style={{ flex: 1, padding: "9px 0", background: COLOR.bg, color: COLOR.text, border: `1px solid ${COLOR.border}`, borderRadius: 6, cursor: "pointer", fontSize: 13 }}>Cancel</button>
-              <button 
-                onClick={() => {
-                   if (delReason === "판매" && (soldPrice === "" || soldPrice === undefined)) return;
-                   onDelete(draft.id, delReason, soldPrice, soldDate);
-                }} 
-                disabled={delReason === "판매" && (soldPrice === "" || soldPrice === undefined)}
-                style={{ flex: 1, padding: "9px 0", background: COLOR.text, color: "#fff", border: "none", borderRadius: 6, cursor: (delReason === "판매" && (soldPrice === "" || soldPrice === undefined)) ? "default" : "pointer", fontSize: 13, opacity: (delReason === "판매" && (soldPrice === "" || soldPrice === undefined)) ? 0.5 : 1 }}>
-                Move
-              </button>
-            </div>
-          </div>
-                )}
+<button
+  onClick={() => setShowDeleteConfirm(true)}
+  style={{
+    width: "100%",
+    padding: "11px 0",
+    background: "#F5F5F5",
+    color: COLOR.subtext,
+    border: "1px solid #E3E3E3",
+    borderRadius: 6,
+    fontSize: 14,
+    cursor: "pointer",
+  }}
+>
+  Delete
+</button>
+
           </div> {/* Right */}
         </div> {/* Body */}
       </div> {/* Modal */}
     </div> {/* Overlay */}
+
+{showDeleteConfirm && (
+  <div
+    onClick={() => setShowDeleteConfirm(false)}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.18)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 999,
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: 340,
+        background: COLOR.bg,
+        borderRadius: 10,
+        border: `1px solid ${COLOR.border}`,
+        padding: "22px",
+        boxShadow: "0 18px 48px rgba(0,0,0,.12)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 500,
+          textAlign: "center",
+          color: COLOR.text,
+          marginBottom: 22,
+        }}
+      >
+        Move this item to Recycle Bin?
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+        }}
+      >
+        <button
+          onClick={() => setShowDeleteConfirm(false)}
+          style={{
+            flex: 1,
+            height: 36,
+            background: COLOR.bg,
+            border: `1px solid ${COLOR.border}`,
+            borderRadius: 6,
+            color: COLOR.text,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => onDelete(draft.id)}
+          style={{
+            flex: 1,
+            height: 36,
+            background: "#ECECEC",
+            border: "1px solid #D9D9D9",
+            borderRadius: 6,
+            color: COLOR.text,
+            fontSize: 13,
+            cursor: "pointer",
+            transition: "all .12s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#E3E3E3";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "#ECECEC";
+          }}
+        >
+          Move
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
   </>
 );
 }
@@ -3379,51 +3939,70 @@ function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, onAddMa
             <Select value={form.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
           </Field>
           <div style={{ gridColumn: "1 / -1" }}>
-  <Field label="Size Label">
-<div
-  style={{
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "nowrap",
-    overflowX: "auto",
-    paddingBottom: 2,
-  }}
->
-    {SIZE_OPTIONS.map((option) => {
-  const active = form.size === option;
 
-  return (
-    <button
-      key={option}
-      type="button"
-      onClick={() =>
-        setForm((prev) => ({
-          ...prev,
-          size: option,
-        }))
-      }
-      style={{
-        minWidth: option === "FREE" ? 54 : 38,
-        height: 34,
-        padding: "0 10px",
-        borderRadius: 17,
-        border: `1px solid ${active ? COLOR.text : COLOR.border}`,
-        background: active ? COLOR.text : COLOR.bg,
-        color: active ? "#fff" : COLOR.text,
-        cursor: "pointer",
-        fontSize: 12,
-        fontWeight: 500,
-        transition: "all .15s",
-      }}
-    >
-      {option}
-    </button>
-  );
-})}
+{CATEGORY_SIZE_TYPE[form.category] !== "none" && (
+  <>
+
+<Field
+  horizontal
+  label="Size Label"
+>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "flex-start",
+      gap: 8,
+      flexWrap: "wrap",
+      width: "100%",
+    }}
+  >
+    {getSizeOptions(form.category).map((option) => {
+      const active = form.size === option;
+
+      return (
+        <button
+          key={option}
+          type="button"
+          onClick={() =>
+            setForm((prev) => ({
+              ...prev,
+              size: option,
+            }))
+          }
+          onMouseEnter={(e) => {
+            if (!active) {
+              e.currentTarget.style.color = COLOR.text;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!active) {
+              e.currentTarget.style.color = COLOR.subtext;
+            }
+          }}
+          style={{
+            minWidth: option === "FREE" ? 56 : 38,
+            padding: "9.5px 13px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 12,
+            lineHeight: 1,
+            borderRadius: 6,
+            cursor: "pointer",
+            background: active ? "#ECECEC" : COLOR.bg,
+            border: `1px solid ${active ? "#D9D9D9" : COLOR.border}`,
+            color: active ? COLOR.text : COLOR.subtext,
+            transition: "all .10s",
+          }}
+        >
+          {option}
+        </button>
+      );
+    })}
   </div>
 </Field>
+  </>
+)}
 </div>
 
           <Field label="Season" style={{ gridColumn: "1 / -1" }}>
