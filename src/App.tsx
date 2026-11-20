@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
-  Search, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, Rows3, Plus, X,
+  Search, SlidersHorizontal, ArrowUpDown, LayoutGrid, Rows3, Plus, X,
   Heart, Trash2, BarChart3, Shirt, Tag, Command, Image as ImageIcon,
   ZoomIn, ZoomOut, ChevronLeft, ChevronRight, ChevronDown, Square, Calendar as CalendarIcon, Database, Check,
 } from "lucide-react";
@@ -399,56 +399,162 @@ declare global {
   }
 }
 
-async function storeGet(key: string): Promise<string |null> {
+/* IndexedDB 기반 저장소 (localStorage 5MB 한도 때문에 이전) */
+const DB_NAME = "wardrobe-archive";
+const DB_STORE = "kv";
+const MIGRATION_FLAG = "meta:migrated_from_localstorage";
+const LEGACY_PREFIXES = ["item:", "brand:", "material:", "reference:", "sale:", "meta:"];
+const STORAGE_ERROR_EVENT = "wardrobe:storage-error";
+
+function reportStorageError(action: string, key: string, e: unknown) {
+  console.error(`storage ${action} failed`, key, e);
+  window.dispatchEvent(new CustomEvent(STORAGE_ERROR_EVENT, { detail: { action, key } }));
+}
+
+function prefixRange(prefix: string): IDBKeyRange {
+  return IDBKeyRange.bound(prefix, prefix + "\uffff");
+}
+
+function idbRequest<T>(req: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbTxDone(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new DOMException("Transaction aborted", "AbortError"));
+  });
+}
+
+/** 기존 localStorage 데이터를 IndexedDB로 한 번만 복사 (원본은 삭제하지 않음) */
+async function migrateFromLocalStorage(db: IDBDatabase): Promise<void> {
+  const flag = await idbRequest(db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(MIGRATION_FLAG));
+  if (flag === "true") return;
+
+  const entries: [string, string][] = [];
   try {
-    return localStorage.getItem(key);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !LEGACY_PREFIXES.some((p) => key.startsWith(p))) continue;
+      const value = localStorage.getItem(key);
+      if (value !== null) entries.push([key, value]);
+    }
   } catch (e) {
-    console.error("storage get failed", key, e);
+    console.error("legacy storage read failed", e);
+  }
+
+  const tx = db.transaction(DB_STORE, "readwrite");
+  const done = idbTxDone(tx);
+  try {
+    const store = tx.objectStore(DB_STORE);
+    for (const [key, value] of entries) store.put(value, key);
+    store.put("true", MIGRATION_FLAG);
+  } catch (e) {
+    // 중간에 예외가 나면 일부만 커밋되지 않도록 트랜잭션 전체를 취소
+    try { tx.abort(); } catch { /* 이미 종료됨 */ }
+    await done.catch(() => {});
+    throw e;
+  }
+  await done;
+}
+
+let dbPromise: Promise<IDBDatabase> | null = null;
+
+function getDb(): Promise<IDBDatabase> {
+  if (!dbPromise) {
+    dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(DB_STORE)) req.result.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+      req.onblocked = () => reject(new Error("IndexedDB blocked"));
+    }).then(async (db) => {
+      await migrateFromLocalStorage(db);
+      // 브라우저가 저장 공간 부족 시 데이터를 임의로 지우지 않도록 요청 (실패해도 무시)
+      void navigator.storage?.persist?.().catch(() => {});
+      return db;
+    });
+  }
+  return dbPromise;
+}
+
+async function storeGet(key: string): Promise<string | null> {
+  try {
+    const db = await getDb();
+    const v = await idbRequest(db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(key));
+    return typeof v === "string" ? v : null;
+  } catch (e) {
+    reportStorageError("get", key, e);
     return null;
   }
 }
 
 async function storeSet(key: string, value: string): Promise<void> {
   try {
-    localStorage.setItem(key, value);
+    const db = await getDb();
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(value, key);
+    await idbTxDone(tx);
   } catch (e) {
-    console.error("storage set failed", key, e);
+    reportStorageError("set", key, e);
   }
 }
 
 async function storeDelete(key: string): Promise<void> {
   try {
-    localStorage.removeItem(key);
+    const db = await getDb();
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(key);
+    await idbTxDone(tx);
   } catch (e) {
-    console.error("storage delete failed", key, e);
+    reportStorageError("delete", key, e);
   }
 }
 
 async function storeListLoad<T>(prefix: string): Promise<T[]> {
   try {
+    const db = await getDb();
+    const values = await idbRequest(
+      db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).getAll(prefixRange(prefix))
+    );
     const result: T[] = [];
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-
-      if (!key || !key.startsWith(prefix)) continue;
-
-      const value = localStorage.getItem(key);
-
-      if (!value) continue;
-
+    for (const value of values) {
+      if (typeof value !== "string" || !value) continue;
       try {
         result.push(JSON.parse(value) as T);
       } catch {
         // 손상된 데이터는 건너뜀
       }
     }
-
     return result;
   } catch (e) {
-    console.error("storage list failed", e);
+    reportStorageError("list", prefix, e);
     return [];
   }
+}
+
+/** 가져오기용: 지정한 접두사의 기존 데이터를 지우고 새 데이터를 한 트랜잭션으로 기록 (실패 시 기존 데이터 유지) */
+async function storeReplacePrefixes(prefixes: string[], entries: [string, string][]): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(DB_STORE, "readwrite");
+  const done = idbTxDone(tx);
+  try {
+    const store = tx.objectStore(DB_STORE);
+    for (const p of prefixes) store.delete(prefixRange(p));
+    for (const [key, value] of entries) store.put(value, key);
+  } catch (e) {
+    // 삭제만 반영되고 새 데이터가 빠지는 일이 없도록 전체 취소
+    try { tx.abort(); } catch { /* 이미 종료됨 */ }
+    await done.catch(() => {});
+    throw e;
+  }
+  await done;
 }
 
 /* ---------------------------------------------------------
@@ -919,12 +1025,6 @@ const addBtnStyle: React.CSSProperties = {
   border: `1px solid ${COLOR.border}`, borderRadius: 6, background: COLOR.bg, cursor: "pointer",
 };
 
-const chipBtnStyle = (active: boolean): React.CSSProperties => ({
-  padding: "6px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer",
-  border: `1px solid ${active ? COLOR.text : COLOR.border}`,
-  background: active ? COLOR.text : COLOR.bg,
-  color: active ? "#fff" : COLOR.text,
-});
 
 interface MediaTabsProps {
   active: string;
@@ -1593,10 +1693,7 @@ const [dragActive, setDragActive] = useState(false);
 const [previewIndex, setPreviewIndex] = useState(0);
 const [imageHover, setImageHover] = useState(false);
 const [hoverThumbIndex, setHoverThumbIndex] = useState<number | null>(null);
-/** 드래그 중인 썸네일 */
-const [activeId, setActiveId] = useState<string | null>(null);
 const dragCounter = useRef(0);
-const THUMB_COUNT = 5;
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -2891,7 +2988,7 @@ interface DrawerProps {
   onAddMaterialToLibrary: (m: MaterialLibraryItem) => void;
   materialFreq: Record<string, number>;
 }
-function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialLibrary, onAddMaterialToLibrary, materialFreq }: DrawerProps) {
+function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand }: DrawerProps) {
   const [mediaTab, setMediaTab] = useState("photos");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showBrandSection, setShowBrandSection] = useState(false);
@@ -3011,14 +3108,8 @@ function formatPurchaseDate(value: string) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function formatPrice(value: string) {
-  const digits = value.replace(/[^\d]/g, "");
-  if (!digits) return "";
-  return Number(digits).toLocaleString("en-US");
-}
 
   const set = (k: keyof ClothingDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setDraft((d) => ({ ...d, [k]: e.target.value }));
-  const setBool = (k: keyof ClothingDraft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [k]: e.target.checked }));
   const setField = (k: keyof ClothingDraft, v: any) => setDraft((d) => ({ ...d, [k]: v }));
 
 return (
@@ -4838,20 +4929,12 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
-function StatisticsPage({ items, brands, sales }: StatisticsPageProps) {
+function StatisticsPage({ items, brands }: StatisticsPageProps) {
   const [seasonTab, setSeasonTab] = useState<Season | "All">("All");
   const filteredItems = useMemo(() => {
     if (seasonTab === "All") return items;
     return items.filter(it => (it.seasons || []).includes(seasonTab));
   }, [items, seasonTab]);
-
-  const seasonLabels: Record<string, string> = {
-    "봄/가을": "Spring/Fall",
-    "여름": "Summer",
-    "겨울": "Winter",
-  };
-
-const seasonOrder = ["봄/가을", "여름", "겨울"];
 
   const stats = useMemo(() => {
     const total = filteredItems.length;
@@ -4948,8 +5031,6 @@ const brandChart = brandEntries.slice(0, 5);
       </div>
     </div>
   );
-
-  const brandChartHeight = Math.max(160, stats.brandChart.length * 32);
 
   return (
     <div style={{ paddingBottom: 60 }}>
@@ -5226,7 +5307,7 @@ const brandChart = brandEntries.slice(0, 5);
 >
   {stats.age
     .filter((a) => a.value > 0)
-    .map((a, i) => (
+    .map((a) => (
       <div
         key={a.name}
         style={{
@@ -5291,7 +5372,7 @@ interface CalendarPageProps {
   onOpenItem: (item: ClothingItem) => void;
 }
 
-function CalendarPage({ items, brands, onOpenItem }: CalendarPageProps) {
+function CalendarPage({ items, onOpenItem }: CalendarPageProps) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [filterCategory, setFilterCategory] =  useState<CategoryGroup | "All">("All");
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
@@ -5704,9 +5785,10 @@ function TrashPage({ items, onRestore, onHardDelete, onRestoreAll, onEmptyTrash,
 // --- Data Modal Component ---
 interface DataModalProps {
   onClose: () => void;
+  onExported?: () => void;
 }
 
-function DataModal({ onClose }: DataModalProps) {
+function DataModal({ onClose, onExported }: DataModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [confirmData, setConfirmData] = useState<ArchiveData | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -5744,6 +5826,10 @@ function DataModal({ onClose }: DataModalProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      if (items.length > 0) {
+        await storeSet("meta:last_export", String(Date.now()));
+        onExported?.();
+      }
       onClose();
     } catch (err) {
       setErrorMsg("Failed to export archive.");
@@ -5777,27 +5863,14 @@ function DataModal({ onClose }: DataModalProps) {
     setRestoring(true);
     try {
       const prefixes = ["item:", "brand:", "material:", "reference:", "sale:"];
-for (const prefix of prefixes) {
-  const keysToDelete: string[] = [];
-
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-
-    if (key && key.startsWith(prefix)) {
-      keysToDelete.push(key);
-    }
-  }
-  
-  for (const key of keysToDelete) {
-    localStorage.removeItem(key);
-  }
-}
-
-      for (const item of confirmData.items || []) await storeSet(`item:${item.id}`, JSON.stringify(item));
-      for (const brand of confirmData.brands || []) await storeSet(`brand:${brand.id}`, JSON.stringify(brand));
-      for (const mat of confirmData.materials || []) await storeSet(`material:${mat.id}`, JSON.stringify(mat));
-      for (const ref of confirmData.references || []) await storeSet(`reference:${ref.id}`, JSON.stringify(ref));
-      for (const sale of confirmData.sales || []) await storeSet(`sale:${sale.id}`, JSON.stringify(sale));
+      const entries: [string, string][] = [
+        ...(confirmData.items || []).map((x: ClothingItem): [string, string] => [`item:${x.id}`, JSON.stringify(x)]),
+        ...(confirmData.brands || []).map((x: Brand): [string, string] => [`brand:${x.id}`, JSON.stringify(x)]),
+        ...(confirmData.materials || []).map((x: MaterialLibraryItem): [string, string] => [`material:${x.id}`, JSON.stringify(x)]),
+        ...(confirmData.references || []).map((x: ReferenceImage): [string, string] => [`reference:${x.id}`, JSON.stringify(x)]),
+        ...(confirmData.sales || []).map((x: SaleRecord): [string, string] => [`sale:${x.id}`, JSON.stringify(x)]),
+      ];
+      await storeReplacePrefixes(prefixes, entries);
 
       if (confirmData.settings) {
         if (confirmData.settings.gallerySize) localStorage.setItem("wardrobe_gallery_size", confirmData.settings.gallerySize.toString());
@@ -5863,6 +5936,8 @@ export default function App() {
   const [brandSortOpen, setBrandSortOpen] = useState<boolean>(false);
   const [autoDeleteDays, setAutoDeleteDays] = useState<number | null>(null);
   const [dataModalOpen, setDataModalOpen] = useState<boolean>(false);
+  const [storageNotice, setStorageNotice] = useState<"write" | "read" | null>(null);
+  const [backupDue, setBackupDue] = useState<boolean>(false);
   
   const [filters, setFilters] = useState<FilterState>({ category: [], season: [], brands: [], favoriteOnly: false });
   const [sorts, setSorts] = useState<SortState[]>([]);
@@ -6040,6 +6115,19 @@ export default function App() {
         await storeSet("meta:seeded_v6_addedAt", "true");
       }
 
+      // IndexedDB는 키(UUID) 순으로 돌려주므로, 추가한 순서대로 보이도록 정렬
+      loadedItems = [...loadedItems].sort((a, b) => (Number(a.addedAt) || 0) - (Number(b.addedAt) || 0));
+
+      // 마지막 백업(내보내기) 이후 30일이 지났으면 안내
+      const lastExport = await storeGet("meta:last_export");
+      let baseline = await storeGet("meta:backup_baseline");
+      if (!baseline) {
+        baseline = String(Date.now());
+        await storeSet("meta:backup_baseline", baseline);
+      }
+      const backupBase = Number(lastExport) || Number(baseline);
+      setBackupDue(Date.now() - backupBase > 30 * 24 * 3600 * 1000);
+
       setItems(loadedItems);
       setBrands(loadedBrands);
       setMaterialLibrary(loadedMaterials);
@@ -6056,6 +6144,15 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]); 
+
+  useEffect(() => {
+    const onStorageError = (e: Event) => {
+      const action = (e as CustomEvent<{ action: string }>).detail?.action;
+      setStorageNotice(action === "get" || action === "list" ? "read" : "write");
+    };
+    window.addEventListener(STORAGE_ERROR_EVENT, onStorageError);
+    return () => window.removeEventListener(STORAGE_ERROR_EVENT, onStorageError);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -6404,6 +6501,27 @@ export default function App() {
       <Sidebar page={page} setPage={handleNavigatePage} count={activeEnrichedItems.length} onOpenData={() => setDataModalOpen(true)} />
 
       <div style={{ flex: 1, width: "100%", padding: "26px 40px 60px", boxSizing: "border-box" }}>
+        {(storageNotice || backupDue) && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            padding: "10px 14px", marginBottom: 16, borderRadius: 6, fontSize: 12.5,
+            border: `1px solid ${storageNotice ? "#D93025" : COLOR.border}`,
+            background: storageNotice ? "#FDECEA" : COLOR.bg2,
+            color: storageNotice ? "#B3261E" : COLOR.text,
+          }}>
+            <span>
+              {storageNotice === "write"
+                ? "Some changes could not be saved. Export an archive now so nothing is lost, then reload the page."
+                : storageNotice === "read"
+                ? "Couldn't read your saved data. Reload the page; if it keeps happening, restore from an exported archive."
+                : "It's been over 30 days since your last backup. Export an archive to keep your data safe."}
+            </span>
+            <span style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button onClick={() => setDataModalOpen(true)} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", border: `1px solid ${COLOR.border}`, background: COLOR.bg, color: COLOR.text }}>Back up</button>
+              <button onClick={() => { setStorageNotice(null); setBackupDue(false); }} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", border: "none", background: "transparent", color: "inherit" }}>Dismiss</button>
+            </span>
+          </div>
+        )}
         {page === "wardrobe" && (
           <WardrobePage 
             query={query} setQuery={setQuery} searchRef={searchRef}
@@ -6450,7 +6568,7 @@ export default function App() {
       
       {addOpen && <AddModal onClose={() => setAddOpen(false)} onAdd={addItem} brands={brands} onAddBrand={addBrand} materialLibrary={materialLibrary} onAddMaterialToLibrary={addMaterialToLibrary} materialFreq={materialFreq} />}
       
-      {dataModalOpen && <DataModal onClose={() => setDataModalOpen(false)} />}
+      {dataModalOpen && <DataModal onClose={() => setDataModalOpen(false)} onExported={() => { setBackupDue(false); setStorageNotice(null); }} />}
     </div>
   );
 }
