@@ -9,6 +9,7 @@ import { BRAND_TIERS, CATEGORIES, COLOR } from "../constants/design";
 import { CATEGORY_SIZE_TYPE, getSizeOptions } from "../constants/sizing";
 import { storeDelete, storeListLoad } from "../lib/storage";
 import { seedItem } from "../lib/seed";
+import { findBrandByName } from "../lib/brandName";
 import { Field, MediaTabs, Select, TextInput } from "./common";
 import { SeasonPicker } from "./SeasonPicker";
 import { BrandInput, FormBrandSection } from "./BrandFields";
@@ -49,16 +50,21 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
   const setField = (k: keyof ClothingItem, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = () => {
+    const typedName = form.brandName.trim();
+    const matchedBrand = findBrandByName(brands, typedName);
     let targetBrandId = "";
-    const matchedBrand = brands.find(b => b.name === form.brandName);
-    if (form.brandName) {
+    let targetBrandName = "";
+    if (typedName) {
       if (matchedBrand) {
+        // 대소문자·공백만 다른 이름은 기존 브랜드로 연결한다
         targetBrandId = matchedBrand.id;
+        targetBrandName = matchedBrand.name;
       } else {
         targetBrandId = crypto.randomUUID();
+        targetBrandName = typedName;
         onAddBrand({
           id: targetBrandId,
-          name: form.brandName,
+          name: typedName,
           tier: newBrandTier,
           logo: newBrandLogo,
           memo: "",
@@ -67,7 +73,7 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
         });
       }
     }
-    const toSave: Partial<ClothingItem> = { ...form, brandId: targetBrandId, addedAt: Date.now() };
+    const toSave: Partial<ClothingItem> = { ...form, brandName: targetBrandName, brandId: targetBrandId, addedAt: Date.now() };
     delete toSave.brandInfo; 
     onAdd(toSave as ClothingItem);
   };

@@ -4,6 +4,7 @@ import type { BrandTier } from "../types/common";
 import type { Brand } from "../types/brand";
 import { BRAND_TIERS, COLOR } from "../constants/design";
 import { fileToCompressedDataUrl } from "../lib/image";
+import { findBrandByName } from "../lib/brandName";
 import { Select, TextInput } from "./common";
 
 interface BrandInputProps {
@@ -168,9 +169,7 @@ export function FormBrandSection({
 }: FormBrandSectionProps) {
 
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const matchedBrand = brands.find(
-    (b) => b.name === formBrandName
-  );
+  const matchedBrand = findBrandByName(brands, formBrandName);
   if (!formBrandName) {
     return null;
   }

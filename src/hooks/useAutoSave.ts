@@ -70,18 +70,31 @@ export function useAutoSave<T>(
       timeoutRef.current = null;
     }, delay);
 
+    // 입력이 이어지는 동안에는 타이머만 취소한다 (저장은 입력이 멈춘 뒤 한 번만)
     return () => {
-      // Synchronous save on unmount if pending
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-        triggerSave(draft);
-        timeoutRef.current = null;
-      }
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [draft, isDirty, delay, triggerSave]);
 
+  // 창이 닫히거나 다른 화면으로 이동해 사라질 때, 아직 저장되지 않은 내용이 있으면 한 번 저장한다
+  const latestDraftRef = useRef(draft);
+  useEffect(() => {
+    latestDraftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      if (JSON.stringify(latestDraftRef.current) !== JSON.stringify(lastSavedData.current)) {
+        triggerSave(latestDraftRef.current);
+      }
+    };
+  }, [triggerSave]);
+
   const forceSave = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
     if (JSON.stringify(draft) !== JSON.stringify(lastSavedData.current)) {
       triggerSave(draft);
     }
