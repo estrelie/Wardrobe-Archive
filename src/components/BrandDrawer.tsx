@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback } from "react";
+import { useMemo, useEffect, useCallback, useState } from "react";
 import { X, Heart, Shirt } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -8,6 +8,7 @@ import type { Brand } from "../types/brand";
 import type { ClothingItem } from "../types/clothing";
 import { BRAND_TIERS, CATEGORY_GROUPS, COLOR } from "../constants/design";
 import { fmtWon } from "../lib/format";
+import { normalizeBrandName } from "../lib/brandName";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { SectionTitle, Select, inputStyle } from "./common";
 import { BrandLogoPicker } from "./BrandFields";
@@ -21,9 +22,15 @@ interface BrandDrawerProps {
   onClose: () => void;
   onViewInWardrobe: (brandId: string) => void;
   onUpdateBrand: (updated: Brand) => void;
+  onDeleteBrand: (id: string) => void;
+  /** 휴지통에 있는, 이 브랜드의 항목 수 (삭제 확인창 안내용) */
+  trashedItemCount: number;
+  /** 이 브랜드를 뺀 나머지 브랜드 이름 (이름 중복 경고용) */
+  otherBrandNames: string[];
   items: ClothingItem[];
 }
-export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, items }: BrandDrawerProps) {
+export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, onDeleteBrand, trashedItemCount, otherBrandNames, items }: BrandDrawerProps) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { draft, setDraft, status, forceSave } = useAutoSave<Brand>(
     brand,
     (dataToSave) => {
@@ -40,11 +47,18 @@ export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, i
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
+      if (e.key !== "Escape") return;
+      if (showDeleteConfirm) setShowDeleteConfirm(false);
+      else handleClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleClose]);
+  }, [handleClose, showDeleteConfirm]);
+
+  // 옷장(휴지통 제외)에 이 브랜드의 옷이 있으면 삭제할 수 없다
+  const activeItemCount = items.filter((i) => i.brandId === brand.id).length;
+  const draftNameKey = normalizeBrandName(draft.name);
+  const nameConflict = draftNameKey !== "" && otherBrandNames.some((n) => normalizeBrandName(n) === draftNameKey);
 
   const stats = useMemo(() => {
     if (!draft) return null;
@@ -180,6 +194,11 @@ export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, i
       onBlur={e => e.target.style.borderBottomColor = "transparent"}
     />
   </div>
+  {nameConflict && (
+    <div style={{ fontSize: 11.5, color: "#B3261E", marginTop: -14, marginBottom: 16 }}>
+      A brand with this name already exists, so this name won't be saved.
+    </div>
+  )}
 
   <div
   style={{
@@ -402,7 +421,74 @@ export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, i
         >
           <Shirt size={16} /> View in Wardrobe
         </button>
+
+        <div style={{ marginTop: 28, paddingTop: 20, borderTop: `1px solid ${COLOR.border}` }}>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={activeItemCount > 0}
+            style={{
+              width: "100%", padding: "11px 0", background: "#F5F5F5", color: COLOR.subtext,
+              border: "1px solid #E3E3E3", borderRadius: 6, fontSize: 14,
+              cursor: activeItemCount > 0 ? "not-allowed" : "pointer",
+              opacity: activeItemCount > 0 ? 0.55 : 1,
+            }}
+          >
+            Delete brand
+          </button>
+          {activeItemCount > 0 && (
+            <div style={{ marginTop: 8, fontSize: 12, color: COLOR.subtext, textAlign: "center", lineHeight: 1.5 }}>
+              {activeItemCount} item{activeItemCount > 1 ? "s" : ""} still {activeItemCount > 1 ? "use" : "uses"} this brand. Move or delete {activeItemCount > 1 ? "them" : "it"} first.
+            </div>
+          )}
+        </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div
+          onClick={() => setShowDeleteConfirm(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,.18)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 340, background: COLOR.bg, borderRadius: 10, border: `1px solid ${COLOR.border}`,
+              padding: "22px", boxShadow: "0 18px 48px rgba(0,0,0,.12)",
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 500, textAlign: "center", color: COLOR.text, marginBottom: 10 }}>
+              Delete this brand?
+            </div>
+            <div style={{ fontSize: 12, textAlign: "center", color: COLOR.subtext, lineHeight: 1.6, marginBottom: 22 }}>
+              Its tier, logo and memo will be removed. This can't be undone.
+              {trashedItemCount > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  {trashedItemCount} item{trashedItemCount > 1 ? "s" : ""} in the Recycle Bin {trashedItemCount > 1 ? "use" : "uses"} this brand.
+                  If you restore {trashedItemCount > 1 ? "them" : "it"}, the brand will be recreated with default settings.
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ flex: 1, height: 36, background: COLOR.bg, border: `1px solid ${COLOR.border}`, borderRadius: 6, color: COLOR.text, fontSize: 13, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => onDeleteBrand(brand.id)}
+                style={{ flex: 1, height: 36, background: "#ECECEC", border: "1px solid #D9D9D9", borderRadius: 6, color: COLOR.text, fontSize: 13, cursor: "pointer", transition: "all .12s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#E3E3E3"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#ECECEC"; }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

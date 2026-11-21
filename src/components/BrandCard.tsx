@@ -27,7 +27,8 @@ export function BrandCard({ brand, onClick }: BrandCardProps) {
         padding: 20,
         background: COLOR.bg,
         cursor: "pointer",
-        transition: "border-color .15s ease",
+        transition: "border-color .15s ease, opacity .15s ease",
+        opacity: brand.items.length === 0 && !hover ? 0.6 : 1,
         position: "relative",
         overflow: "hidden",
       }}

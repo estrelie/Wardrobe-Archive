@@ -6,6 +6,7 @@ import type { ClothingDraft, ClothingItem } from "../types/clothing";
 import { BRAND_TIERS, COLOR } from "../constants/design";
 import { CATEGORY_SIZE_TYPE, getSizeFields, getSizeOptions } from "../constants/sizing";
 import { useAutoSave } from "../hooks/useAutoSave";
+import { findBrandByName } from "../lib/brandName";
 import {
   AutoResizeTextarea,
   Field,
@@ -66,56 +67,53 @@ const handleMouseDown = (e: MouseEvent) => {
   };
 }, [showBrandSection]);
 
+  // 닫는 순간 새로 만든 브랜드는 아직 brands에 반영되기 전이라서, 따로 기억해 두고 함께 찾는다
+  const createdBrandsRef = useRef<Brand[]>([]);
+
+  // 저장용으로 항목을 정리하면서 브랜드 연결(brandId / brandName)을 맞춘다
+  const toItem = useCallback((data: ClothingDraft): ClothingItem => {
+    const typedName = (data.brandName || "").trim();
+    const matched = findBrandByName([...brands, ...createdBrandsRef.current], typedName);
+    const toSave: Partial<ClothingDraft> = {
+      ...data,
+      // 새 브랜드는 닫을 때(handleClose) 한 번만 만들기 때문에, 그 전까지는 brandId를 비워 둔다
+      brandId: matched ? matched.id : "",
+      brandName: matched ? matched.name : typedName,
+    };
+    delete toSave.brandInfo;
+    delete toSave._newBrandTier;
+    delete toSave._newBrandLogo;
+    return toSave as ClothingItem;
+  }, [brands]);
+
   const { draft, setDraft, status, forceSave } = useAutoSave<ClothingDraft>(
     { ...item, _newBrandTier: BRAND_TIERS[5], _newBrandLogo: "" },
-    (dataToSave) => {
-      let targetBrandId = dataToSave.brandId;
-      const matchedBrand = brands.find(b => b.name === dataToSave.brandName);
-      
- if (dataToSave.brandName) {
-  if (matchedBrand) {
-    targetBrandId = matchedBrand.id;
-  } else {
-    // Drawer에서는 새 브랜드를 생성하지 않는다
-    // 닫을 때(handleClose) 한 번만 생성한다
-    targetBrandId = "";
-  }
-} else {
-  targetBrandId = "";
-}
-
-      const toSave: Partial<ClothingDraft> = { ...dataToSave, brandId: targetBrandId };
-      delete toSave.brandInfo; 
-      delete toSave._newBrandTier;
-      delete toSave._newBrandLogo;
-      onSave(toSave as ClothingItem);
-    },
+    (dataToSave) => onSave(toItem(dataToSave)),
     700,
     (i) => i.id
   );
 
-const handleClose = useCallback(() => {
-  const matchedBrand = brands.find((b) => b.name === draft.brandName);
-
-  if (draft.brandName && !matchedBrand) {
-    const newBrandId = crypto.randomUUID();
-    onAddBrand({
-      id: newBrandId,
-      name: draft.brandName,
-      tier: draft._newBrandTier || BRAND_TIERS[5],
-      logo: draft._newBrandLogo || "",
-      memo: "",
-      favorite: false,
-      color: "#B8B8B8",
-    });
-    setDraft((d) => ({
-      ...d,
-      brandId: newBrandId,
-    }));
-  }
-  forceSave();
-  onClose();
-}, [draft, brands, onAddBrand, forceSave, onClose, setDraft]);
+  const handleClose = useCallback(() => {
+    const typedName = (draft.brandName || "").trim();
+    const matched = findBrandByName([...brands, ...createdBrandsRef.current], typedName);
+    if (typedName && !matched) {
+      const newBrand: Brand = {
+        id: crypto.randomUUID(),
+        name: typedName,
+        tier: draft._newBrandTier || BRAND_TIERS[5],
+        logo: draft._newBrandLogo || "",
+        memo: "",
+        favorite: false,
+        color: "#B8B8B8",
+      };
+      createdBrandsRef.current.push(newBrand);
+      onAddBrand(newBrand);
+      // 자동 저장이 이미 끝난 뒤에 닫는 경우에도 항목이 새 브랜드에 연결되도록 바로 저장한다
+      onSave(toItem(draft));
+    }
+    forceSave();
+    onClose();
+  }, [draft, brands, onAddBrand, onSave, toItem, forceSave, onClose]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

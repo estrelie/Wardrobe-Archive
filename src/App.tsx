@@ -17,6 +17,8 @@ import {
   storeSet,
 } from "./lib/storage";
 import { initialItems } from "./lib/seed";
+import { findBrandByName } from "./lib/brandName";
+import { planBrandRelink } from "./lib/brandLink";
 import type { FilterState } from "./components/FilterPopover";
 import type { SortState } from "./components/SortPanel";
 import { Drawer } from "./components/ClothingDrawer";
@@ -245,6 +247,20 @@ export default function App() {
       const backupBase = Number(lastExport) || Number(baseline);
       setBackupDue(Date.now() - backupBase > 30 * 24 * 3600 * 1000);
 
+      // 브랜드 연결이 끊긴 항목 복구 (옷장에 있는 항목만. 휴지통 항목은 복원할 때 처리한다)
+      {
+        const activeItems = loadedItems.filter((i) => !i.deleted);
+        const { items: relinked, newBrands } = planBrandRelink(activeItems, loadedBrands);
+        const changedItems = relinked.filter((it, idx) => it !== activeItems[idx]);
+        if (newBrands.length > 0 || changedItems.length > 0) {
+          for (const b of newBrands) await storeSet(`brand:${b.id}`, JSON.stringify(b));
+          for (const it of changedItems) await storeSet(`item:${it.id}`, JSON.stringify(it));
+          const changedById = new Map(changedItems.map((i) => [i.id, i]));
+          loadedItems = loadedItems.map((i) => changedById.get(i.id) ?? i);
+          loadedBrands = [...loadedBrands, ...newBrands];
+        }
+      }
+
       setItems(loadedItems);
       setBrands(loadedBrands);
       setMaterialLibrary(loadedMaterials);
@@ -299,10 +315,17 @@ export default function App() {
     storeSet(`brand:${b.id}`, JSON.stringify(b));
   };
 
-  const updateBrand = useCallback((updated: Brand) => {
+  const updateBrand = useCallback((incoming: Brand) => {
     setBrands((prev) => {
-      const oldBrand = prev.find(b => b.id === updated.id);
-      const nameChanged = oldBrand && oldBrand.name !== updated.name;
+      const oldBrand = prev.find(b => b.id === incoming.id);
+      // 이미 삭제된 브랜드는 (서랍이 닫힐 때 대기 중이던 자동 저장으로) 되살리지 않는다
+      if (!oldBrand) return prev;
+
+      // 다른 브랜드와 이름이 겹치면(대소문자·공백 무시) 이름만 이전 값으로 유지한다
+      const updated = findBrandByName(prev, incoming.name, incoming.id)
+        ? { ...incoming, name: oldBrand.name }
+        : incoming;
+      const nameChanged = oldBrand.name !== updated.name;
 
       if (nameChanged) {
         setItems(prevItems => {
@@ -324,6 +347,15 @@ export default function App() {
       return prev.map(b => b.id === updated.id ? updated : b);
     });
   }, []);
+
+  /** 브랜드 삭제: 옷장에 소속 옷이 없을 때만 허용 (휴지통에만 있는 옷은 복원할 때 브랜드가 다시 만들어진다) */
+  const deleteBrand = useCallback((id: string) => {
+    if (items.some((i) => !i.deleted && i.brandId === id)) return;
+    setBrands((prev) => prev.filter((b) => b.id !== id));
+    setFilters((f) => (f.brands.includes(id) ? { ...f, brands: f.brands.filter((b) => b !== id) } : f));
+    setSelectedBrandId(null);
+    storeDelete(`brand:${id}`);
+  }, [items]);
 
   const addMaterialToLibrary = useCallback((newMat: MaterialLibraryItem) => {
     setMaterialLibrary(prev => [...prev, newMat]);
@@ -502,20 +534,30 @@ export default function App() {
     setSelected(null);
   };
   
+  /** 복원되는 항목의 브랜드 연결을 확인하고, 브랜드가 삭제됐다면 다시 만든다 */
+  const applyBrandRecovery = (restored: ClothingItem[]): ClothingItem[] => {
+    const { items: fixed, newBrands } = planBrandRelink(restored, brands);
+    if (newBrands.length > 0) {
+      setBrands((prev) => [...prev, ...newBrands]);
+      newBrands.forEach((b) => storeSet(`brand:${b.id}`, JSON.stringify(b)));
+    }
+    return fixed;
+  };
+
   const restoreItem = async (id: string) => {
-    setItems((all) => {
-      const next = all.map(i => i.id === id ? { 
-        ...i, 
-        deleted: false, 
-        deletedAt: null,
-        deletionReason: null,
-        soldPrice: null,
-        soldDate: null 
-      } : i);
-      const changed = next.find(i => i.id === id);
-      if (changed) storeSet(`item:${id}`, JSON.stringify(changed));
-      return next;
-    });
+    const target = items.find((i) => i.id === id);
+    if (!target) return;
+    const cleared = {
+      ...target,
+      deleted: false,
+      deletedAt: null,
+      deletionReason: null,
+      soldPrice: null,
+      soldDate: null,
+    };
+    const [fixed] = applyBrandRecovery([cleared]);
+    setItems((all) => all.map((i) => (i.id === id ? fixed : i)));
+    storeSet(`item:${id}`, JSON.stringify(fixed));
   };
 
   const hardDeleteItem = async (id: string) => {
@@ -526,24 +568,22 @@ export default function App() {
     allRefs.filter(r => r.itemId === id).forEach(r => storeDelete(`reference:${r.id}`));
   };
 
-  const restoreAll = useCallback(() => {
-    setItems((all) => {
-      const next = all.map(i => i.deleted ? { 
-        ...i, 
-        deleted: false, 
-        deletedAt: null,
-        deletionReason: null,
-        soldPrice: null,
-        soldDate: null
-      } : i);
-      next.forEach(i => {
-         if (all.find(old => old.id === i.id)?.deleted) {
-            storeSet(`item:${i.id}`, JSON.stringify(i));
-         }
-      });
-      return next;
-    });
-  }, []);
+  const restoreAll = () => {
+    const trashed = items.filter((i) => i.deleted);
+    if (trashed.length === 0) return;
+    const cleared = trashed.map((i) => ({
+      ...i,
+      deleted: false,
+      deletedAt: null,
+      deletionReason: null,
+      soldPrice: null,
+      soldDate: null,
+    }));
+    const fixed = applyBrandRecovery(cleared);
+    const fixedById = new Map(fixed.map((i) => [i.id, i]));
+    setItems((all) => all.map((i) => fixedById.get(i.id) ?? i));
+    fixed.forEach((i) => storeSet(`item:${i.id}`, JSON.stringify(i)));
+  };
 
   const emptyTrash = useCallback(async () => {
     const toDelete = items.filter(i => i.deleted);
@@ -674,6 +714,9 @@ export default function App() {
           brand={activeBrandEntity} 
           onClose={() => setSelectedBrandId(null)} 
           onUpdateBrand={updateBrand}
+          onDeleteBrand={deleteBrand}
+          trashedItemCount={items.filter((i) => i.deleted && i.brandId === activeBrandEntity.id).length}
+          otherBrandNames={brands.filter((b) => b.id !== activeBrandEntity.id).map((b) => b.name)}
           items={activeEnrichedItems}
           onViewInWardrobe={(brandId) => {
             setFilters(f => ({ ...f, brands: [brandId] }));
