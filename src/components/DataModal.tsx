@@ -5,6 +5,7 @@ import type { ReferenceImage } from "../types/reference";
 import type { Brand } from "../types/brand";
 import type { ClothingItem } from "../types/clothing";
 import type { ArchiveData, SaleRecord } from "../types/sale";
+import type { PurchaseRecord } from "../types/purchase";
 import { COLOR } from "../constants/design";
 import { storeListLoad, storeReplacePrefixes, storeSet } from "../lib/storage";
 
@@ -27,6 +28,7 @@ export function DataModal({ onClose, onExported }: DataModalProps) {
       const materials = await storeListLoad<MaterialLibraryItem>("material:");
       const references = await storeListLoad<ReferenceImage>("reference:");
       const sales = await storeListLoad<SaleRecord>("sale:");
+      const purchases = await storeListLoad<PurchaseRecord>("purchase:");
 
       const archive: ArchiveData = {
         version: 1,
@@ -36,6 +38,7 @@ export function DataModal({ onClose, onExported }: DataModalProps) {
         materials,
         references,
         sales,
+        purchases,
         settings: {
           gallerySize: Number(localStorage.getItem("wardrobe_gallery_size")) || 200,
           autoDeleteDays: localStorage.getItem("wardrobe_auto_delete_days") === "null" ? null : Number(localStorage.getItem("wardrobe_auto_delete_days"))
@@ -88,13 +91,16 @@ export function DataModal({ onClose, onExported }: DataModalProps) {
     if (!confirmData) return;
     setRestoring(true);
     try {
-      const prefixes = ["item:", "brand:", "material:", "reference:", "sale:"];
+      // 구매 기록이 들어 있지 않은 예전 백업 파일을 가져올 때는 지금 있는 구매 기록을 지우지 않는다
+      const hasPurchases = Array.isArray(confirmData.purchases);
+      const prefixes = ["item:", "brand:", "material:", "reference:", "sale:", ...(hasPurchases ? ["purchase:"] : [])];
       const entries: [string, string][] = [
         ...(confirmData.items || []).map((x: ClothingItem): [string, string] => [`item:${x.id}`, JSON.stringify(x)]),
         ...(confirmData.brands || []).map((x: Brand): [string, string] => [`brand:${x.id}`, JSON.stringify(x)]),
         ...(confirmData.materials || []).map((x: MaterialLibraryItem): [string, string] => [`material:${x.id}`, JSON.stringify(x)]),
         ...(confirmData.references || []).map((x: ReferenceImage): [string, string] => [`reference:${x.id}`, JSON.stringify(x)]),
         ...(confirmData.sales || []).map((x: SaleRecord): [string, string] => [`sale:${x.id}`, JSON.stringify(x)]),
+        ...(confirmData.purchases || []).map((x: PurchaseRecord): [string, string] => [`purchase:${x.id}`, JSON.stringify(x)]),
       ];
       await storeReplacePrefixes(prefixes, entries);
 

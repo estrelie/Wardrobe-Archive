@@ -190,8 +190,8 @@ const brandChart = brandEntries.slice(0, 5);
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "36px 40px", justifyItems: "center", }}>
           <StatBlock label="Total Items" value={`${stats.total}`} />
           <StatBlock label="Favorites" value={`${stats.favs}`} sub={`/ ${stats.total} (${stats.favRatio}%)`} />
-          <StatBlock label="Total Spending" value={fmtWon(stats.totalSpend)} />
-          <StatBlock label="Average Purchase Price" value={fmtWon(stats.avgSpend)} />
+          <StatBlock label="Spending (Owned)" value={fmtWon(stats.totalSpend)} />
+          <StatBlock label="Avg. Price (Owned)" value={fmtWon(stats.avgSpend)} />
         </div>
       </div>
 

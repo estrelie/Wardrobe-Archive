@@ -7,6 +7,7 @@ import type { ReferenceImage } from "./types/reference";
 import type { Brand, BrandWithStats } from "./types/brand";
 import type { ClothingItem } from "./types/clothing";
 import type { SaleRecord } from "./types/sale";
+import type { PurchaseRecord } from "./types/purchase";
 import { BRAND_TIERS, COLOR } from "./constants/design";
 import { INITIAL_MATERIALS_LIBRARY } from "./constants/materials";
 import {
@@ -19,6 +20,8 @@ import {
 import { initialItems } from "./lib/seed";
 import { findBrandByName } from "./lib/brandName";
 import { planBrandRelink } from "./lib/brandLink";
+import { makeThumbnail } from "./lib/image";
+import { buildPurchaseEntries, recordFromItem } from "./lib/purchaseLog";
 import type { FilterState } from "./components/FilterPopover";
 import type { SortState } from "./components/SortPanel";
 import { Drawer } from "./components/ClothingDrawer";
@@ -39,6 +42,7 @@ export default function App() {
   const [brands, setBrands] = useState<Brand[]>([]); 
   const [materialLibrary, setMaterialLibrary] = useState<MaterialLibraryItem[]>([]);
   const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
   const [page, setPage] = useState<PageType>("wardrobe");
   const [viewMode, setViewMode] = useState<ViewMode>("gallery");
   const [query, setQuery] = useState<string>("");
@@ -61,6 +65,21 @@ export default function App() {
   // Gallery Card Size Slider State
   const [gallerySize, setGallerySize] = useState<number>(200);
 
+  /** 영구 삭제되는 옷의 구매 요약(이름·브랜드·구매일·구매가·썸네일)을 남긴다. 구매일이 없으면 남기지 않는다 */
+  const savePurchaseRecord = useCallback(async (item: ClothingItem) => {
+    if (!item.purchaseDate) return;
+    const thumbnail = await makeThumbnail(item.images?.[0] || "");
+    const record = recordFromItem(item, thumbnail);
+    if (!record) return;
+    setPurchaseRecords((prev) => [...prev.filter((r) => r.id !== record.id), record]);
+    await storeSet(`purchase:${record.id}`, JSON.stringify(record));
+  }, []);
+
+  const removePurchaseRecord = useCallback(async (id: string) => {
+    setPurchaseRecords((prev) => prev.filter((r) => r.id !== id));
+    await storeDelete(`purchase:${id}`);
+  }, []);
+
   const runAutoDelete = useCallback(async (currentItems: ClothingItem[], days: number | null) => {
     if (days === null) return;
     const now = Date.now();
@@ -71,6 +90,8 @@ export default function App() {
     );
     
     if (toDelete.length > 0) {
+      // 캘린더의 구매 이력이 사라지지 않도록 지우기 전에 구매 기록을 먼저 남긴다
+      for (const item of toDelete) await savePurchaseRecord(item);
       setItems(prev => prev.filter(it => !toDelete.some(del => del.id === it.id)));
       for (const item of toDelete) {
         await storeDelete(`item:${item.id}`);
@@ -78,7 +99,7 @@ export default function App() {
         allRefs.filter(r => r.itemId === item.id).forEach(r => storeDelete(`reference:${r.id}`));
       }
     }
-  }, []);
+  }, [savePurchaseRecord]);
 
   // StrictMode(개발 모드)에서는 effect가 두 번 실행되어 첫 실행 시 브랜드가 중복 생성되므로 한 번만 실행
   const initialLoadStartedRef = useRef(false);
@@ -102,6 +123,7 @@ export default function App() {
       let loadedBrands = await storeListLoad<Brand>("brand:");
       let loadedMaterials = await storeListLoad<MaterialLibraryItem>("material:");
       let loadedSales = await storeListLoad<SaleRecord>("sale:");
+      const loadedPurchases = await storeListLoad<PurchaseRecord>("purchase:");
 
       if (seededFlagV3 !== "true") {
         if (loadedItems.length === 0) {
@@ -265,6 +287,7 @@ export default function App() {
       setBrands(loadedBrands);
       setMaterialLibrary(loadedMaterials);
       setSales(loadedSales);
+      setPurchaseRecords(loadedPurchases);
       setLoading(false);
       
       runAutoDelete(loadedItems, parsedAutoDeleteDays);
@@ -387,6 +410,9 @@ export default function App() {
     enrichedItems.filter(i => i.deleted)
                  .sort((a,b) => new Date(b.deletedAt || 0).getTime() - new Date(a.deletedAt || 0).getTime()), 
   [enrichedItems]);
+
+  // 캘린더용 구매 기록: 옷장 + 휴지통 + 영구 삭제된 옷의 구매 기록
+  const purchaseEntries = useMemo(() => buildPurchaseEntries(enrichedItems, purchaseRecords), [enrichedItems, purchaseRecords]);
 
   const materialFreq = useMemo(() => {
     const freq: Record<string, number> = {};
@@ -560,7 +586,13 @@ export default function App() {
     storeSet(`item:${id}`, JSON.stringify(fixed));
   };
 
-  const hardDeleteItem = async (id: string) => {
+  /** removeFromHistory: true면 구매 기록도 함께 지운다. 기본은 구매 기록을 남긴다 */
+  const hardDeleteItem = async (id: string, removeFromHistory: boolean = false) => {
+    const target = items.find((i) => i.id === id);
+    if (target) {
+      if (removeFromHistory) await removePurchaseRecord(id);
+      else await savePurchaseRecord(target);
+    }
     setItems((all) => all.filter((i) => i.id !== id));
     await storeDelete(`item:${id}`);
     
@@ -587,13 +619,15 @@ export default function App() {
 
   const emptyTrash = useCallback(async () => {
     const toDelete = items.filter(i => i.deleted);
+    // 비우기 전에 구매 기록을 먼저 남긴다 (캘린더의 구매 이력 유지)
+    for (const item of toDelete) await savePurchaseRecord(item);
     setItems(all => all.filter(i => !i.deleted));
     for (const item of toDelete) {
       await storeDelete(`item:${item.id}`);
       const allRefs = await storeListLoad<ReferenceImage>("reference:");
       allRefs.filter(r => r.itemId === item.id).forEach(r => storeDelete(`reference:${r.id}`));
     }
-  }, [items]);
+  }, [items, savePurchaseRecord]);
 
   const addItem = (form: ClothingItem) => {
     const newItem = { ...form }; 
@@ -703,7 +737,7 @@ export default function App() {
           />
         )}
         {page === "stats" && <StatisticsPage items={activeEnrichedItems} brands={brands} sales={sales} />}
-        {page === "calendar" && <CalendarPage items={activeEnrichedItems} brands={brands} onOpenItem={setSelected} />}
+        {page === "calendar" && <CalendarPage entries={purchaseEntries} onOpenItem={setSelected} onRemoveRecord={removePurchaseRecord} />}
         {page === "trash" && <TrashPage items={trashEnrichedItems} onRestore={restoreItem} onHardDelete={hardDeleteItem} onRestoreAll={restoreAll} onEmptyTrash={emptyTrash} autoDeleteDays={autoDeleteDays} onAutoDeleteChange={handleAutoDeleteChange} />}
       </div>
 
