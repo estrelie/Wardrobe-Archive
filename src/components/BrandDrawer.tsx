@@ -364,8 +364,8 @@ export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, o
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
           <BStat label="Items Owned" value={`${stats.count}`} sub={`${stats.percentage}% of total`} />
           <BStat label="Favorites" value={`${stats.favCount}`} sub={`out of ${stats.count}`} />
-          <BStat label="Total Spending" value={fmtWon(stats.totalSpend)} />
-          <BStat label="Average Purchase Price" value={fmtWon(stats.avgPrice)} />
+          <BStat label="Spending (Owned)" value={fmtWon(stats.totalSpend)} />
+          <BStat label="Avg. Price (Owned)" value={fmtWon(stats.avgPrice)} />
           <BStat label="Avg. Ownership" value={`${stats.avgDays} days`} />
           <BStat label="Latest Purchase" value={stats.newestDate} />
           <BStat label="First Purchase" value={stats.oldestDate} />
