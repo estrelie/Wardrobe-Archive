@@ -1,5 +1,6 @@
 import type { ClothingItem } from "../types/clothing";
 import type { PurchaseRecord } from "../types/purchase";
+import { toPrice } from "./price";
 
 /** owned: 옷장에 있음 / bin: 휴지통에 있음 / removed: 영구 삭제되어 구매 기록만 남음 */
 export type PurchaseStatus = "owned" | "bin" | "removed";
@@ -79,7 +80,7 @@ export function recordFromItem(item: ClothingItem, thumbnail: string): PurchaseR
     name: item.name,
     category: String(item.category),
     purchaseDate: item.purchaseDate,
-    purchasePrice: item.purchasePrice,
+    purchasePrice: toPrice(item.purchasePrice),
     thumbnail,
     removedAt: Date.now(),
   };
