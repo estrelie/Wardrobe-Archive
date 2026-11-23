@@ -27,8 +27,9 @@ interface AddModalProps {
   materialFreq: Record<string, number>;
 }
 export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, onAddMaterialToLibrary, materialFreq }: AddModalProps) {
-  const [form, setForm] = useState<ClothingItem>(seedItem({}));
+  const [form, setForm] = useState<ClothingItem>(seedItem({ price: "", purchasePrice: "" }));
   const [mediaTab, setMediaTab] = useState("photos");
+  const [nameError, setNameError] = useState(false);
   const [newBrandTier, setNewBrandTier] = useState<BrandTier | string>(BRAND_TIERS[5]); 
   const [newBrandLogo, setNewBrandLogo] = useState("");
   const initialFormRef = useRef(form);
@@ -50,6 +51,7 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
   const setField = (k: keyof ClothingItem, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = () => {
+    if (!form.name.trim()) { setNameError(true); return; }
     const typedName = form.brandName.trim();
     const matchedBrand = findBrandByName(brands, typedName);
     let targetBrandId = "";
@@ -73,7 +75,7 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
         });
       }
     }
-    const toSave: Partial<ClothingItem> = { ...form, brandName: targetBrandName, brandId: targetBrandId, addedAt: Date.now() };
+    const toSave: Partial<ClothingItem> = { ...form, name: form.name.trim(), brandName: targetBrandName, brandId: targetBrandId, addedAt: Date.now() };
     delete toSave.brandInfo; 
     onAdd(toSave as ClothingItem);
   };
@@ -121,7 +123,10 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
         </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 18 }}>
-          <Field label="Product Name"><TextInput value={form.name} onChange={set("name")} placeholder="" /></Field>
+          <Field label="Product Name">
+            <TextInput value={form.name} onChange={(e) => { set("name")(e); if (nameError) setNameError(false); }} placeholder="" />
+            {nameError && <div style={{ marginTop: 6, fontSize: 11.5, color: "#B3261E" }}>Enter a product name to save.</div>}
+          </Field>
           <Field label="Category">
             <Select value={form.category} onChange={set("category")}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select>
           </Field>
@@ -195,8 +200,8 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
           <Field label="Season" style={{ gridColumn: "1 / -1" }}>
             <SeasonPicker value={form.seasons} onChange={(v) => setField("seasons", v)} />
           </Field>
-          <Field label="Retail Price"><TextInput type="number" value={form.price} onChange={set("price")} /></Field>
-          <Field label="Purchase Price"><TextInput type="number" value={form.purchasePrice} onChange={set("purchasePrice")} /></Field>
+          <Field label="Retail Price"><TextInput type="number" min={0} value={form.price === 0 ? "" : form.price} onChange={(e) => setField("price", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))} /></Field>
+          <Field label="Purchase Price"><TextInput type="number" min={0} value={form.purchasePrice === 0 ? "" : form.purchasePrice} onChange={(e) => setField("purchasePrice", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))} /></Field>
           <Field label="Place of Purchase"><TextInput value={form.purchasePlace} onChange={set("purchasePlace")} /></Field>
           <Field label="Purchase Date"><TextInput type="date" value={form.purchaseDate} onChange={set("purchaseDate")} /></Field>
         </div>

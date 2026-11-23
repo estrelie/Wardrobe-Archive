@@ -76,6 +76,8 @@ const handleMouseDown = (e: MouseEvent) => {
     const matched = findBrandByName([...brands, ...createdBrandsRef.current], typedName);
     const toSave: Partial<ClothingDraft> = {
       ...data,
+      // 상품 이름은 비워 둘 수 없다 (비우면 열었을 때의 이름을 유지)
+      name: data.name.trim() ? data.name : item.name,
       // 새 브랜드는 닫을 때(handleClose) 한 번만 만들기 때문에, 그 전까지는 brandId를 비워 둔다
       brandId: matched ? matched.id : "",
       brandName: matched ? matched.name : typedName,
@@ -84,7 +86,7 @@ const handleMouseDown = (e: MouseEvent) => {
     delete toSave._newBrandTier;
     delete toSave._newBrandLogo;
     return toSave as ClothingItem;
-  }, [brands]);
+  }, [brands, item.name]);
 
   const { draft, setDraft, status, forceSave } = useAutoSave<ClothingDraft>(
     { ...item, _newBrandTier: BRAND_TIERS[5], _newBrandLogo: "" },
@@ -483,8 +485,9 @@ return (
 >
   <TextInput
     type="number"
-    value={draft.price}
-    onChange={set("price")}
+    min={0}
+    value={draft.price === 0 ? "" : draft.price}
+    onChange={(e) => setField("price", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
     style={{ paddingRight: 32 }}
   />
   <span
@@ -515,8 +518,9 @@ return (
 >
   <TextInput
     type="number"
-    value={draft.purchasePrice}
-    onChange={set("purchasePrice")}
+    min={0}
+    value={draft.purchasePrice === 0 ? "" : draft.purchasePrice}
+    onChange={(e) => setField("purchasePrice", e.target.value === "" ? "" : Math.max(0, Number(e.target.value)))}
     style={{ paddingRight: 32 }}
   />
   <span

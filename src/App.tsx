@@ -20,6 +20,7 @@ import {
 import { initialItems } from "./lib/seed";
 import { findBrandByName } from "./lib/brandName";
 import { planBrandRelink } from "./lib/brandLink";
+import { normalizeItemPrices, normalizeRecordPrice } from "./lib/price";
 import { makeThumbnail } from "./lib/image";
 import { buildPurchaseEntries, recordFromItem } from "./lib/purchaseLog";
 import type { FilterState } from "./components/FilterPopover";
@@ -123,7 +124,7 @@ export default function App() {
       let loadedBrands = await storeListLoad<Brand>("brand:");
       let loadedMaterials = await storeListLoad<MaterialLibraryItem>("material:");
       let loadedSales = await storeListLoad<SaleRecord>("sale:");
-      const loadedPurchases = await storeListLoad<PurchaseRecord>("purchase:");
+      let loadedPurchases = await storeListLoad<PurchaseRecord>("purchase:");
 
       if (seededFlagV3 !== "true") {
         if (loadedItems.length === 0) {
@@ -268,6 +269,20 @@ export default function App() {
       }
       const backupBase = Number(lastExport) || Number(baseline);
       setBackupDue(Date.now() - backupBase > 30 * 24 * 3600 * 1000);
+
+      // 예전에 글자("0150000")로 저장된 가격을 숫자로 바로잡는다
+      {
+        const fixedItems = loadedItems.map(normalizeItemPrices);
+        for (let i = 0; i < fixedItems.length; i++) {
+          if (fixedItems[i] !== loadedItems[i]) await storeSet(`item:${fixedItems[i].id}`, JSON.stringify(fixedItems[i]));
+        }
+        loadedItems = fixedItems;
+        const fixedRecords = loadedPurchases.map(normalizeRecordPrice);
+        for (let i = 0; i < fixedRecords.length; i++) {
+          if (fixedRecords[i] !== loadedPurchases[i]) await storeSet(`purchase:${fixedRecords[i].id}`, JSON.stringify(fixedRecords[i]));
+        }
+        loadedPurchases = fixedRecords;
+      }
 
       // 브랜드 연결이 끊긴 항목 복구 (옷장에 있는 항목만. 휴지통 항목은 복원할 때 처리한다)
       {
@@ -492,6 +507,10 @@ export default function App() {
           if (s.key === "purchaseDate") { av = new Date(av).getTime() || 0; bv = new Date(bv).getTime() || 0; }
           if (s.key === "addedAt") { av = Number(av) || 0; bv = Number(bv) || 0; }
           if (s.key === "seasons") { av = (av || []).join(","); bv = (bv || []).join(","); }
+          if (s.key === "price") { av = Number(av) || 0; bv = Number(bv) || 0; }
+          // 글자는 대소문자를 구분하지 않고 비교한다 (예: Acne Studios가 ARKET보다 앞)
+          if (typeof av === "string") av = av.toLowerCase();
+          if (typeof bv === "string") bv = bv.toLowerCase();
           if (av < bv) return s.dir === "asc" ? -1 : 1;
           if (av > bv) return s.dir === "asc" ? 1 : -1;
         }
