@@ -152,6 +152,17 @@ export async function storeListLoad<T>(prefix: string): Promise<T[]> {
   }
 }
 
+/** 접두사에 해당하는 레코드 개수 (내용을 읽지 않으므로 사진이 많아도 빠르다) */
+export async function storeCount(prefix: string): Promise<number> {
+  try {
+    const db = await getDb();
+    return await idbRequest(db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).count(prefixRange(prefix)));
+  } catch (e) {
+    reportStorageError("list", prefix, e);
+    return 0;
+  }
+}
+
 /** 가져오기용: 지정한 접두사의 기존 데이터를 지우고 새 데이터를 한 트랜잭션으로 기록 (실패 시 기존 데이터 유지) */
 export async function storeReplacePrefixes(prefixes: string[], entries: [string, string][]): Promise<void> {
   const db = await getDb();

@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import type { BrandTier } from "../types/common";
 import type { MaterialLibraryItem } from "../types/material";
 import type { ReferenceImage } from "../types/reference";
 import type { Brand } from "../types/brand";
 import type { ClothingItem } from "../types/clothing";
-import { BRAND_TIERS, CATEGORIES, COLOR } from "../constants/design";
+import { CATEGORIES, COLOR } from "../constants/design";
 import { CATEGORY_SIZE_TYPE, getSizeOptions } from "../constants/sizing";
 import { storeDelete, storeListLoad } from "../lib/storage";
 import { seedItem } from "../lib/seed";
@@ -30,7 +29,6 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
   const [form, setForm] = useState<ClothingItem>(seedItem({ price: "", purchasePrice: "" }));
   const [mediaTab, setMediaTab] = useState("photos");
   const [nameError, setNameError] = useState(false);
-  const [newBrandTier, setNewBrandTier] = useState<BrandTier | string>(BRAND_TIERS[5]); 
   const [newBrandLogo, setNewBrandLogo] = useState("");
   const initialFormRef = useRef(form);
   const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialFormRef.current), [form]);
@@ -67,7 +65,6 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
         onAddBrand({
           id: targetBrandId,
           name: typedName,
-          tier: newBrandTier,
           logo: newBrandLogo,
           memo: "",
           favorite: false,
@@ -117,7 +114,6 @@ export function AddModal({ onClose, onAdd, brands, onAddBrand, materialLibrary, 
           <BrandInput value={form.brandName} onChange={(v) => setField("brandName", v)} brands={brands.map(b => b.name)} />
           <FormBrandSection 
             formBrandName={form.brandName} brands={brands} 
-            newTier={newBrandTier} setNewTier={setNewBrandTier} 
             newLogo={newBrandLogo} setNewLogo={setNewBrandLogo} 
           />
         </Field>

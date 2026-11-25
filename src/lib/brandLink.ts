@@ -1,6 +1,5 @@
 import type { Brand } from "../types/brand";
 import type { ClothingItem } from "../types/clothing";
-import { BRAND_TIERS } from "../constants/design";
 import { findBrandByName } from "./brandName";
 
 /**
@@ -28,7 +27,6 @@ export function planBrandRelink(
       brand = {
         id: it.brandId || crypto.randomUUID(),
         name,
-        tier: BRAND_TIERS[5],
         logo: "",
         memo: "",
         favorite: false,

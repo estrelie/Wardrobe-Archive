@@ -1,4 +1,4 @@
-import type { BrandTier, Category, DeclutterMethod, Season } from "./common";
+import type { Category, DeclutterMethod, Season } from "./common";
 import type { Material } from "./material";
 import type { Brand } from "./brand";
 
@@ -43,6 +43,5 @@ export interface ClothingItem {
 }
 
 export interface ClothingDraft extends ClothingItem {
-  _newBrandTier?: BrandTier | string;
   _newBrandLogo?: string;
 }

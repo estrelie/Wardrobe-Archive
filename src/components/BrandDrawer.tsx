@@ -6,11 +6,11 @@ import {
 import type { Category } from "../types/common";
 import type { Brand } from "../types/brand";
 import type { ClothingItem } from "../types/clothing";
-import { BRAND_TIERS, CATEGORY_GROUPS, COLOR } from "../constants/design";
+import { CATEGORY_GROUPS, COLOR } from "../constants/design";
 import { fmtWon } from "../lib/format";
 import { normalizeBrandName } from "../lib/brandName";
 import { useAutoSave } from "../hooks/useAutoSave";
-import { SectionTitle, Select, inputStyle } from "./common";
+import { SectionTitle, inputStyle } from "./common";
 import { BrandLogoPicker } from "./BrandFields";
 import { ClothingCard } from "./ClothingCard";
 
@@ -208,32 +208,6 @@ export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, o
     marginBottom: 22,
   }}
 >
-  <div>
-    <div
-      style={{
-        fontSize: 11,
-        color: COLOR.subtext,
-        marginBottom: 6,
-      }}
-    >
-      Category
-    </div>
-
-    <Select
-      value={draft.tier}
-      onChange={e => setDraft(d => ({ ...d, tier: e.target.value }))}
-      style={{
-        width: 170,
-        padding: "6px 10px",
-        fontSize: 12,
-      }}
-    >
-      {BRAND_TIERS.map(t => (
-        <option key={t}>{t}</option>
-      ))}
-    </Select>
-  </div>
-
   <div>
   <div
     style={{
@@ -462,7 +436,7 @@ export function BrandDrawer({ brand, onClose, onViewInWardrobe, onUpdateBrand, o
               Delete this brand?
             </div>
             <div style={{ fontSize: 12, textAlign: "center", color: COLOR.subtext, lineHeight: 1.6, marginBottom: 22 }}>
-              Its tier, logo and memo will be removed. This can't be undone.
+              Its logo and memo will be removed. This can't be undone.
               {trashedItemCount > 0 && (
                 <div style={{ marginTop: 8 }}>
                   {trashedItemCount} item{trashedItemCount > 1 ? "s" : ""} in the Recycle Bin {trashedItemCount > 1 ? "use" : "uses"} this brand.

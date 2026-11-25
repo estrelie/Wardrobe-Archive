@@ -3,7 +3,7 @@ import { X, Heart, Check } from "lucide-react";
 import type { MaterialLibraryItem } from "../types/material";
 import type { Brand } from "../types/brand";
 import type { ClothingDraft, ClothingItem } from "../types/clothing";
-import { BRAND_TIERS, COLOR } from "../constants/design";
+import { COLOR } from "../constants/design";
 import { CATEGORY_SIZE_TYPE, getSizeFields, getSizeOptions } from "../constants/sizing";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { findBrandByName } from "../lib/brandName";
@@ -83,13 +83,12 @@ const handleMouseDown = (e: MouseEvent) => {
       brandName: matched ? matched.name : typedName,
     };
     delete toSave.brandInfo;
-    delete toSave._newBrandTier;
     delete toSave._newBrandLogo;
     return toSave as ClothingItem;
   }, [brands, item.name]);
 
   const { draft, setDraft, status, forceSave } = useAutoSave<ClothingDraft>(
-    { ...item, _newBrandTier: BRAND_TIERS[5], _newBrandLogo: "" },
+    { ...item, _newBrandLogo: "" },
     (dataToSave) => onSave(toItem(dataToSave)),
     700,
     (i) => i.id
@@ -102,7 +101,6 @@ const handleMouseDown = (e: MouseEvent) => {
       const newBrand: Brand = {
         id: crypto.randomUUID(),
         name: typedName,
-        tier: draft._newBrandTier || BRAND_TIERS[5],
         logo: draft._newBrandLogo || "",
         memo: "",
         favorite: false,
@@ -418,8 +416,6 @@ return (
       <FormBrandSection
         formBrandName={draft.brandName}
         brands={brands}
-        newTier={draft._newBrandTier || ""}
-        setNewTier={(v) => setField("_newBrandTier", v)}
         newLogo={draft._newBrandLogo || ""}
         setNewLogo={(v) => setField("_newBrandLogo", v)}
       />

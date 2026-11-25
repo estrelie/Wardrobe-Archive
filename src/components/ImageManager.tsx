@@ -1,7 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Plus, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { COLOR } from "../constants/design";
-import { fileToCompressedDataUrl } from "../lib/image";
+import { compressFiles, fileToCompressedDataUrl, uploadNotice } from "../lib/image";
 
 /* ---------------------------------------------------------
    Image Manager (Product Photos)
@@ -15,6 +15,13 @@ export function ImageManager({ images, onChange }: ImageManagerProps) {
 const inputRef = useRef<HTMLInputElement>(null);
 const [busy, setBusy] = useState(false);
 const [dragActive, setDragActive] = useState(false);
+/** 업로드 결과 안내 (일부 파일을 건너뛰었을 때) */
+const [notice, setNotice] = useState<string | null>(null);
+useEffect(() => {
+  if (!notice) return;
+  const t = setTimeout(() => setNotice(null), 5000);
+  return () => clearTimeout(t);
+}, [notice]);
 /** 현재 크게 보고 있는 사진 (상세 모달 전용) */
 const [previewIndex, setPreviewIndex] = useState(0);
 const [imageHover, setImageHover] = useState(false);
@@ -26,12 +33,9 @@ const dragCounter = useRef(0);
     if (!files.length) return;
     setBusy(true);
     try {
-      const compressed = await Promise.all(files.map((f) => fileToCompressedDataUrl(f)));
-      const available = MAX_IMAGE_COUNT - images.length;
-onChange([
-  ...images,
-  ...compressed.slice(0, available),
-]);
+      const result = await compressFiles(files, MAX_IMAGE_COUNT - images.length, fileToCompressedDataUrl);
+      if (result.urls.length > 0) onChange([...images, ...result.urls]);
+      setNotice(uploadNotice(result, MAX_IMAGE_COUNT));
     } catch (err) {
       console.error("image processing failed", err);
     } finally {
@@ -116,16 +120,15 @@ const next = images.filter((_, i) => i !== idx);
     setDragActive(false);
     dragCounter.current = 0;
 
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
-    if (!files.length) return;
+    const all = Array.from(e.dataTransfer.files);
+    const files = all.filter(f => f.type.startsWith("image/"));
+    if (!all.length) return;
     setBusy(true);
     try {
-      const compressed = await Promise.all(files.map((f) => fileToCompressedDataUrl(f)));
-      const available = MAX_IMAGE_COUNT - images.length;
-onChange([
-  ...images,
-  ...compressed.slice(0, available),
-]);
+      const result = await compressFiles(files, MAX_IMAGE_COUNT - images.length, fileToCompressedDataUrl);
+      result.failed += all.length - files.length; // 이미지가 아닌 파일도 "읽을 수 없음"으로 안내한다
+      if (result.urls.length > 0) onChange([...images, ...result.urls]);
+      setNotice(uploadNotice(result, MAX_IMAGE_COUNT));
     } catch (err) {
       console.error("image processing failed", err);
     } finally {
@@ -405,6 +408,7 @@ style={{
     style={{ display: "none" }}
   />
 </div>
+{notice && <div style={{ marginTop: 8, fontSize: 12, color: COLOR.subtext, textAlign: "center" }}>{notice}</div>}
 
     </div>
   );

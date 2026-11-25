@@ -8,7 +8,7 @@ import type { Brand, BrandWithStats } from "./types/brand";
 import type { ClothingItem } from "./types/clothing";
 import type { SaleRecord } from "./types/sale";
 import type { PurchaseRecord } from "./types/purchase";
-import { BRAND_TIERS, COLOR } from "./constants/design";
+import { COLOR } from "./constants/design";
 import { INITIAL_MATERIALS_LIBRARY } from "./constants/materials";
 import {
   STORAGE_ERROR_EVENT,
@@ -21,6 +21,7 @@ import { initialItems } from "./lib/seed";
 import { findBrandByName } from "./lib/brandName";
 import { planBrandRelink } from "./lib/brandLink";
 import { normalizeItemPrices, normalizeRecordPrice } from "./lib/price";
+import { sanitizeBrand, sanitizeItem, sanitizeList } from "./lib/sanitize";
 import { makeThumbnail } from "./lib/image";
 import { buildPurchaseEntries, recordFromItem } from "./lib/purchaseLog";
 import type { FilterState } from "./components/FilterPopover";
@@ -44,6 +45,7 @@ export default function App() {
   const [materialLibrary, setMaterialLibrary] = useState<MaterialLibraryItem[]>([]);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [purchaseRecords, setPurchaseRecords] = useState<PurchaseRecord[]>([]);
+  const [skippedRecords, setSkippedRecords] = useState(0);
   const [page, setPage] = useState<PageType>("wardrobe");
   const [viewMode, setViewMode] = useState<ViewMode>("gallery");
   const [query, setQuery] = useState<string>("");
@@ -123,6 +125,19 @@ export default function App() {
       let loadedItems = await storeListLoad<ClothingItem>("item:");
       let loadedBrands = await storeListLoad<Brand>("brand:");
       let loadedMaterials = await storeListLoad<MaterialLibraryItem>("material:");
+
+      // 깨진 레코드 정리: 빠진 칸은 기본값으로 채우고(바뀐 것만 다시 저장), 읽을 수 없는 레코드는 건너뛴다.
+      // 저장소의 원본 레코드는 지우지 않는다.
+      let skippedCount: number;
+      {
+        const si = sanitizeList<ClothingItem>(loadedItems, sanitizeItem);
+        const sb = sanitizeList<Brand>(loadedBrands, sanitizeBrand);
+        for (const it of si.changed) await storeSet(`item:${it.id}`, JSON.stringify(it));
+        for (const b of sb.changed) await storeSet(`brand:${b.id}`, JSON.stringify(b));
+        loadedItems = si.items;
+        loadedBrands = sb.items;
+        skippedCount = si.skipped + sb.skipped;
+      }
       let loadedSales = await storeListLoad<SaleRecord>("sale:");
       let loadedPurchases = await storeListLoad<PurchaseRecord>("purchase:");
 
@@ -155,7 +170,6 @@ export default function App() {
             const newBrand: Brand = {
               id: newId,
               name: bName,
-              tier: legacyIt.tier || BRAND_TIERS[5], 
               logo: legacyIt.brandLogo || "",
               memo: localStorage.getItem(`brand_memo_${bName}`) || "",
               favorite: false,
@@ -303,6 +317,7 @@ export default function App() {
       setMaterialLibrary(loadedMaterials);
       setSales(loadedSales);
       setPurchaseRecords(loadedPurchases);
+      setSkippedRecords(skippedCount);
       setLoading(false);
       
       runAutoDelete(loadedItems, parsedAutoDeleteDays);
@@ -415,7 +430,7 @@ export default function App() {
       const matchedBrand = brands.find(b => b.id === it.brandId);
       return { 
         ...it, 
-        brandInfo: matchedBrand || { id: it.brandId, name: it.brandName, tier: "보세", logo: "", memo: "", favorite: false, color: "#B8B8B8" } 
+        brandInfo: matchedBrand || { id: it.brandId, name: it.brandName, logo: "", memo: "", favorite: false, color: "#B8B8B8" } 
       };
     });
   }, [items, brands]);
@@ -711,7 +726,7 @@ export default function App() {
       <Sidebar page={page} setPage={handleNavigatePage} count={activeEnrichedItems.length} onOpenData={() => setDataModalOpen(true)} />
 
       <div style={{ flex: 1, width: "100%", padding: "26px 40px 60px", boxSizing: "border-box" }}>
-        {(storageNotice || backupDue) && (
+        {(storageNotice || skippedRecords > 0 || backupDue) && (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
             padding: "10px 14px", marginBottom: 16, borderRadius: 6, fontSize: 12.5,
@@ -724,11 +739,13 @@ export default function App() {
                 ? "Some changes could not be saved. Export an archive now so nothing is lost, then reload the page."
                 : storageNotice === "read"
                 ? "Couldn't read your saved data. Reload the page; if it keeps happening, restore from an exported archive."
+                : skippedRecords > 0
+                ? `${skippedRecords} damaged record${skippedRecords > 1 ? "s" : ""} couldn't be read and ${skippedRecords > 1 ? "were" : "was"} skipped. The rest of your data is fine. Back up now to be safe.`
                 : "It's been over 30 days since your last backup. Export an archive to keep your data safe."}
             </span>
             <span style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <button onClick={() => setDataModalOpen(true)} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", border: `1px solid ${COLOR.border}`, background: COLOR.bg, color: COLOR.text }}>Back up</button>
-              <button onClick={() => { setStorageNotice(null); setBackupDue(false); }} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", border: "none", background: "transparent", color: "inherit" }}>Dismiss</button>
+              <button onClick={() => { setStorageNotice(null); setSkippedRecords(0); setBackupDue(false); }} style={{ padding: "5px 10px", fontSize: 12, borderRadius: 5, cursor: "pointer", border: "none", background: "transparent", color: "inherit" }}>Dismiss</button>
             </span>
           </div>
         )}

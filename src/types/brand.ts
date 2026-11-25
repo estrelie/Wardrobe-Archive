@@ -1,11 +1,9 @@
-import type { BrandTier } from "./common";
 import type { ClothingItem } from "./clothing";
 
 // --- src/types/brand.ts ---
 export interface Brand {
   id: string;
   name: string;
-  tier: BrandTier | string;
   logo: string;
   memo: string;
   favorite: boolean;

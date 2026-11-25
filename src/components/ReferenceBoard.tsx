@@ -9,7 +9,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { ReferenceImage } from "../types/reference";
 import { COLOR } from "../constants/design";
 import { storeDelete, storeListLoad, storeSet } from "../lib/storage";
-import { fileToCompressedDataUrl } from "../lib/image";
+import { compressFiles, fileToCompressedDataUrl, uploadNotice } from "../lib/image";
 import { ImageViewer } from "./ImageViewer";
 
 interface ReferenceCardProps {
@@ -124,6 +124,13 @@ export const ReferenceManager = React.memo(({ itemId }: ReferenceManagerProps) =
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  /** 업로드 결과 안내 (일부 파일을 건너뛰었을 때) */
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(t);
+  }, [notice]);
   const dragCounter = useRef(0);
 
   const sensors = useSensors(
@@ -147,14 +154,9 @@ const createRefs = async (files: File[]) => {
     0,
     MAX_REFERENCE_COUNT - references.length
   );
-  if (available === 0) return [];
-  const targetFiles = files.slice(0, available);
-  const compressed = await Promise.all(
-    targetFiles.map((f) =>
-      fileToCompressedDataUrl(f, 1000, 0.8)
-    )
-  );
-  return compressed.map((image, idx) => ({
+  const result = await compressFiles(files, available, (f) => fileToCompressedDataUrl(f, 1000, 0.8));
+  setNotice(uploadNotice(result, MAX_REFERENCE_COUNT));
+  return result.urls.map((image, idx) => ({
     id: crypto.randomUUID(),
     itemId,
     image,
@@ -213,6 +215,7 @@ const handlePaste = async (e: ClipboardEvent) => {
 
 const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
   if (references.length >= MAX_REFERENCE_COUNT) {
+    setNotice(`You've reached the limit (${MAX_REFERENCE_COUNT} images).`);
     e.target.value = "";
     return;
   }
@@ -268,6 +271,7 @@ const handleContainerDrop = async (
     f.type.startsWith("image/")
   );
   if (references.length >= MAX_REFERENCE_COUNT) {
+    setNotice(`You've reached the limit (${MAX_REFERENCE_COUNT} images).`);
     return;
   }
   if (!files.length) {
@@ -459,6 +463,7 @@ style={{
         </DragOverlay>
       </DndContext>
       <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: "none" }} />
+      {notice && <div style={{ marginTop: 8, fontSize: 12, color: COLOR.subtext, textAlign: "center" }}>{notice}</div>}
       
       {viewerIndex !== null && (
         <ImageViewer 

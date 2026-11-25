@@ -18,7 +18,7 @@ export const CLOTHING_SORT_FIELDS: SortField[] = [
   { key: "brandName", label: "Brand" },
   { key: "seasons", label: "Season" },
   { key: "purchaseDate", label: "Purchase Date" },
-  { key: "price", label: "Price" },
+  { key: "price", label: "Retail Price" },
 ];
 
 export const BRAND_SORT_FIELDS: SortField[] = [
