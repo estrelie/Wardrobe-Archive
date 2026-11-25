@@ -51,7 +51,7 @@ export function BrandCard({ brand, onClick }: BrandCardProps) {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          marginBottom: 10,
+          marginBottom: 16,
         }}
       >
         <BrandLogo src={brand.logo} size={18} />
@@ -66,20 +66,6 @@ export function BrandCard({ brand, onClick }: BrandCardProps) {
         >
           {brand.name}
         </div>
-      </div>
-
-      {/* Category */}
-      <div
-        style={{
-          fontSize: 12,
-          color: COLOR.subtext,
-          marginBottom: 16,
-          paddingLeft: brand.logo ? 26 : 0,
-          textAlign: "left",
-          width: "100%",
-        }}
-      >
-        {brand.tier}
       </div>
 
       {/* Bottom */}

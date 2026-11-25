@@ -1,5 +1,4 @@
 import type {
-  BrandTier,
   Category,
   CategoryGroup,
   DeclutterMethod,
@@ -106,4 +105,3 @@ export const SIZE_OPTIONS_BY_TYPE: Record<string, string[]> = {
   none: [],
 };
 export const DECLUTTER_METHODS: DeclutterMethod[] = ["중고 거래", "처분"];
-export const BRAND_TIERS: BrandTier[] = ["헤리티지", "디자이너", "컨템포러리", "SPA", "영캐주얼", "보세", "스포츠", "아웃도어"];

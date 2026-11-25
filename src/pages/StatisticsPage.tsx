@@ -90,8 +90,7 @@ export function StatisticsPage({ items, brands }: StatisticsPageProps) {
       byCategory[group] = (byCategory[group] || 0) + 1;
       }
       
-      const brandTier = i.brandInfo?.tier || "보세";
-      if (i.brandId && brandTier !== "보세") {
+      if (i.brandId) {
         byBrand[i.brandId] = (byBrand[i.brandId] || 0) + 1;
       }
 

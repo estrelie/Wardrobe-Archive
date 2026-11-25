@@ -1,11 +1,10 @@
 import React, { useState, useMemo, useRef } from "react";
 import { X, Image as ImageIcon } from "lucide-react";
-import type { BrandTier } from "../types/common";
 import type { Brand } from "../types/brand";
-import { BRAND_TIERS, COLOR } from "../constants/design";
+import { COLOR } from "../constants/design";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { findBrandByName } from "../lib/brandName";
-import { Select, TextInput } from "./common";
+import { TextInput } from "./common";
 
 interface BrandInputProps {
   value: string;
@@ -153,8 +152,6 @@ style={{
 interface FormBrandSectionProps {
   formBrandName: string;
   brands: Brand[];
-  newTier: BrandTier | string;
-  setNewTier: (val: BrandTier | string) => void;
   newLogo: string;
   setNewLogo: (val: string) => void;
 }
@@ -162,8 +159,6 @@ interface FormBrandSectionProps {
 export function FormBrandSection({
   formBrandName,
   brands,
-  newTier,
-  setNewTier,
   newLogo,
   setNewLogo,
 }: FormBrandSectionProps) {
@@ -217,20 +212,9 @@ return (
         />
       </div>
 
-      <Select
-        value={newTier}
-        onChange={(e) => setNewTier(e.target.value)}
-        style={{
-          height: 40,
-          paddingTop: 0,
-          paddingBottom: 0,
-          borderRadius: 6,
-        }}
-      >
-        {BRAND_TIERS.map((tier) => (
-          <option key={tier}>{tier}</option>
-        ))}
-      </Select>
+      <div style={{ fontSize: 12, color: COLOR.subtext }}>
+        New brand · add a logo (optional)
+      </div>
     </div>
   </div>
 );
