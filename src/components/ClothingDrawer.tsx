@@ -7,6 +7,8 @@ import { COLOR } from "../constants/design";
 import { CATEGORY_SIZE_TYPE, getSizeFields, getSizeOptions } from "../constants/sizing";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { findBrandByName } from "../lib/brandName";
+import { MaterialsEditor } from "./MaterialsEditor";
+import { normalizePurchaseDate } from "../lib/dates";
 import {
   AutoResizeTextarea,
   Field,
@@ -34,7 +36,7 @@ interface DrawerProps {
   onAddMaterialToLibrary: (m: MaterialLibraryItem) => void;
   materialFreq: Record<string, number>;
 }
-export function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand }: DrawerProps) {
+export function Drawer({ item, onClose, onSave, onDelete, brands, onAddBrand, materialLibrary, onAddMaterialToLibrary, materialFreq }: DrawerProps) {
   const [mediaTab, setMediaTab] = useState("photos");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showBrandSection, setShowBrandSection] = useState(false);
@@ -69,15 +71,25 @@ const handleMouseDown = (e: MouseEvent) => {
 
   // 닫는 순간 새로 만든 브랜드는 아직 brands에 반영되기 전이라서, 따로 기억해 두고 함께 찾는다
   const createdBrandsRef = useRef<Brand[]>([]);
+  // 서랍이 열려 있는 동안 마지막으로 저장된 올바른 이름·구매일.
+  // (item prop은 처음 열 때의 값이라 저장해도 갱신되지 않으므로, 되돌릴 값은 여기서 기억한다)
+  const lastGoodName = useRef(item.name);
+  const lastGoodDate = useRef(item.purchaseDate);
 
   // 저장용으로 항목을 정리하면서 브랜드 연결(brandId / brandName)을 맞춘다
   const toItem = useCallback((data: ClothingDraft): ClothingItem => {
     const typedName = (data.brandName || "").trim();
     const matched = findBrandByName([...brands, ...createdBrandsRef.current], typedName);
+    const nameOk = data.name.trim() !== "";
+    const date = normalizePurchaseDate(data.purchaseDate);
+    if (nameOk) lastGoodName.current = data.name;
+    if (date !== null) lastGoodDate.current = date;
     const toSave: Partial<ClothingDraft> = {
       ...data,
-      // 상품 이름은 비워 둘 수 없다 (비우면 열었을 때의 이름을 유지)
-      name: data.name.trim() ? data.name : item.name,
+      // 상품 이름은 비워 둘 수 없다 (비우면 마지막으로 저장된 이름을 유지)
+      name: nameOk ? data.name : lastGoodName.current,
+      // 구매일은 항상 YYYY-MM-DD로 저장한다. 입력 도중이거나 존재하지 않는 날짜면 마지막으로 저장된 값을 유지한다
+      purchaseDate: date ?? lastGoodDate.current,
       // 새 브랜드는 닫을 때(handleClose) 한 번만 만들기 때문에, 그 전까지는 brandId를 비워 둔다
       brandId: matched ? matched.id : "",
       brandName: matched ? matched.name : typedName,
@@ -85,7 +97,7 @@ const handleMouseDown = (e: MouseEvent) => {
     delete toSave.brandInfo;
     delete toSave._newBrandLogo;
     return toSave as ClothingItem;
-  }, [brands, item.name]);
+  }, [brands]);
 
   const { draft, setDraft, status, forceSave } = useAutoSave<ClothingDraft>(
     { ...item, _newBrandLogo: "" },
@@ -785,6 +797,24 @@ onMouseUp={(e) => {
 <Field
   horizontal
   label="Materials"
+  style={{
+    alignItems: "flex-start",
+    marginBottom: 11,
+  }}
+>
+  {/* 추가 창에서 입력한 소재 구성(예: Cotton 60%)을 여기서도 보고 고칠 수 있다 */}
+  <MaterialsEditor
+    materials={draft.materials ?? []}
+    onChange={(m) => setField("materials", m)}
+    materialLibrary={materialLibrary}
+    onAddMaterialToLibrary={onAddMaterialToLibrary}
+    materialFreq={materialFreq}
+  />
+</Field>
+
+<Field
+  horizontal
+  label="Material Note"
   style={{
     alignItems: "flex-start",
     marginBottom: 11,
