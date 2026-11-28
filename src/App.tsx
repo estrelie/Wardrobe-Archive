@@ -22,6 +22,8 @@ import { findBrandByName } from "./lib/brandName";
 import { planBrandRelink } from "./lib/brandLink";
 import { normalizeItemPrices, normalizeRecordPrice } from "./lib/price";
 import { sanitizeBrand, sanitizeItem, sanitizeList } from "./lib/sanitize";
+import { parseAutoDeleteDays } from "./lib/settings";
+import { normalizeItemDates, normalizeRecordDate } from "./lib/dates";
 import { makeThumbnail } from "./lib/image";
 import { buildPurchaseEntries, recordFromItem } from "./lib/purchaseLog";
 import type { FilterState } from "./components/FilterPopover";
@@ -84,7 +86,7 @@ export default function App() {
   }, []);
 
   const runAutoDelete = useCallback(async (currentItems: ClothingItem[], days: number | null) => {
-    if (days === null) return;
+    if (days === null || !(days > 0)) return;
     const now = Date.now();
     const threshold = days * 24 * 3600 * 1000;
     
@@ -115,7 +117,7 @@ export default function App() {
       if (savedGallerySize) setGallerySize(Number(savedGallerySize));
 
       const savedAutoDelete = localStorage.getItem("wardrobe_auto_delete_days");
-      const parsedAutoDeleteDays = savedAutoDelete === "null" || !savedAutoDelete ? null : Number(savedAutoDelete);
+      const parsedAutoDeleteDays = parseAutoDeleteDays(savedAutoDelete);
       setAutoDeleteDays(parsedAutoDeleteDays);
 
       const seededFlagV6 = await storeGet("meta:seeded_v6_addedAt");
@@ -286,12 +288,12 @@ export default function App() {
 
       // 예전에 글자("0150000")로 저장된 가격을 숫자로 바로잡는다
       {
-        const fixedItems = loadedItems.map(normalizeItemPrices);
+        const fixedItems = loadedItems.map((it) => normalizeItemDates(normalizeItemPrices(it)));
         for (let i = 0; i < fixedItems.length; i++) {
           if (fixedItems[i] !== loadedItems[i]) await storeSet(`item:${fixedItems[i].id}`, JSON.stringify(fixedItems[i]));
         }
         loadedItems = fixedItems;
-        const fixedRecords = loadedPurchases.map(normalizeRecordPrice);
+        const fixedRecords = loadedPurchases.map((r) => normalizeRecordDate(normalizeRecordPrice(r)));
         for (let i = 0; i < fixedRecords.length; i++) {
           if (fixedRecords[i] !== loadedPurchases[i]) await storeSet(`purchase:${fixedRecords[i].id}`, JSON.stringify(fixedRecords[i]));
         }

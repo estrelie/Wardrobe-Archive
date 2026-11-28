@@ -5,6 +5,7 @@ import type { ClothingItem } from "../types/clothing";
 import type { ArchiveData, SaleRecord } from "../types/sale";
 import type { PurchaseRecord } from "../types/purchase";
 import { storeCount, storeListLoad } from "./storage";
+import { parseAutoDeleteDays } from "./settings";
 
 /** 저장소의 모든 데이터를 백업 파일(ArchiveData) 형태로 읽어 온다. 앱 화면 상태와 무관하게 저장소에서 직접 읽는다 */
 export async function buildArchive(): Promise<ArchiveData> {
@@ -25,7 +26,7 @@ export async function buildArchive(): Promise<ArchiveData> {
     purchases,
     settings: {
       gallerySize: Number(localStorage.getItem("wardrobe_gallery_size")) || 200,
-      autoDeleteDays: localStorage.getItem("wardrobe_auto_delete_days") === "null" ? null : Number(localStorage.getItem("wardrobe_auto_delete_days")),
+      autoDeleteDays: parseAutoDeleteDays(localStorage.getItem("wardrobe_auto_delete_days")),
     },
   };
 }

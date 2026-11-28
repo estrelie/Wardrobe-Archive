@@ -11,6 +11,7 @@ import { storeReplacePrefixes, storeSet } from "../lib/storage";
 import { archiveFileName, buildArchive, currentCounts, downloadJson } from "../lib/archive";
 import type { ArchiveCounts } from "../lib/archive";
 import { sanitizeBrand, sanitizeItem, sanitizeList } from "../lib/sanitize";
+import { parseAutoDeleteDays } from "../lib/settings";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const describe = (c: { items: number; brands: number; purchases: number | null }) =>
@@ -101,7 +102,7 @@ export function DataModal({ onClose, onExported }: DataModalProps) {
 
       if (confirmData.settings) {
         if (confirmData.settings.gallerySize) localStorage.setItem("wardrobe_gallery_size", confirmData.settings.gallerySize.toString());
-        if (confirmData.settings.autoDeleteDays !== undefined) localStorage.setItem("wardrobe_auto_delete_days", String(confirmData.settings.autoDeleteDays));
+        if (confirmData.settings.autoDeleteDays !== undefined) localStorage.setItem("wardrobe_auto_delete_days", String(parseAutoDeleteDays(confirmData.settings.autoDeleteDays)));
       }
 
       window.location.reload();

@@ -94,7 +94,7 @@ export function StatisticsPage({ items, brands }: StatisticsPageProps) {
         byBrand[i.brandId] = (byBrand[i.brandId] || 0) + 1;
       }
 
-if (i.purchaseDate) {
+if (i.purchaseDate && !Number.isNaN(new Date(i.purchaseDate).getTime())) {
   const purchase = new Date(i.purchaseDate);
   const today = new Date();
 

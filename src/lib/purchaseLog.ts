@@ -1,6 +1,7 @@
 import type { ClothingItem } from "../types/clothing";
 import type { PurchaseRecord } from "../types/purchase";
 import { toPrice } from "./price";
+import { normalizePurchaseDate } from "./dates";
 
 /** owned: 옷장에 있음 / bin: 휴지통에 있음 / removed: 영구 삭제되어 구매 기록만 남음 */
 export type PurchaseStatus = "owned" | "bin" | "removed";
@@ -73,13 +74,14 @@ export function buildPurchaseEntries(items: ClothingItem[], records: PurchaseRec
 
 /** 영구 삭제되는 항목에서 구매 기록을 만든다. 구매일이 없으면 남길 기록이 없으므로 null */
 export function recordFromItem(item: ClothingItem, thumbnail: string): PurchaseRecord | null {
-  if (!item.purchaseDate) return null;
+  const purchaseDate = normalizePurchaseDate(item.purchaseDate);
+  if (!purchaseDate) return null;
   return {
     id: item.id,
     brandName: item.brandName,
     name: item.name,
     category: String(item.category),
-    purchaseDate: item.purchaseDate,
+    purchaseDate,
     purchasePrice: toPrice(item.purchasePrice),
     thumbnail,
     removedAt: Date.now(),
